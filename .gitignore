@@ -10,4 +10,5 @@ htmlcov/
 *.pyo
 *.pyd
 *.sqlite3
-
+erro_venv.txt
+alembic_erro.txt
