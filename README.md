@@ -8,10 +8,12 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - SQLAlchemy 2.0 configurado para MySQL
 - Alembic configurado para migrations
 - Pydantic v2 configurado
-- PyMySQL configurado por variável de ambiente
+- PyMySQL configurado por variavel de ambiente
 - rota `/health`
+- autenticacao administrativa basica com JWT
+- rotas `/api/v1/auth/login` e `/api/v1/auth/me`
 - tratamento padronizado de erros
-- estrutura preparada para evolução do domínio
+- estrutura preparada para evolucao do dominio
 
 ## Tecnologias
 
@@ -32,16 +34,17 @@ alembic/
 tests/
 ```
 
-## Configuração local
+## Configuracao local
 
 1. Crie e ative um ambiente virtual.
-2. Instale as dependências.
+2. Instale as dependencias.
 3. Crie um arquivo `.env` com base em `.env.example`.
 4. Ajuste a `DATABASE_URL` para apontar para o seu MySQL.
 5. Rode as migrations.
-6. Suba a API.
+6. Crie o admin inicial.
+7. Suba a API.
 
-## Comandos de instalação
+## Comandos de instalacao
 
 ### PowerShell
 
@@ -56,14 +59,19 @@ Copy-Item .env.example .env
 ## Banco de dados MySQL
 
 - O projeto aceita somente MySQL.
-- A conexão é feita por `DATABASE_URL`.
-- O driver configurado é `PyMySQL`.
+- A conexao e feita por `DATABASE_URL`.
+- O driver configurado e `PyMySQL`.
 - As tabelas iniciais foram preparadas com `InnoDB` e `utf8mb4`.
 
 Exemplo:
 
 ```env
 DATABASE_URL=mysql+pymysql://cest_user:cest_password@localhost:3306/cest_placas?charset=utf8mb4
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=change_me
+SECRET_KEY=change_me_in_production
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
 ```
 
 ## Rodar migrations
@@ -71,6 +79,18 @@ DATABASE_URL=mysql+pymysql://cest_user:cest_password@localhost:3306/cest_placas?
 ```powershell
 alembic upgrade head
 ```
+
+## Criar admin inicial
+
+O primeiro administrador e criado a partir das variaveis `ADMIN_USERNAME` e
+`ADMIN_PASSWORD` do `.env`.
+
+```powershell
+python -m app.db.seed
+```
+
+Se o usuario informado em `ADMIN_USERNAME` ja existir, o comando mantem o
+registro atual.
 
 ## Criar nova migration
 
@@ -86,7 +106,7 @@ uvicorn app.main:app --reload
 
 ## Health check
 
-Após subir a aplicação:
+Apos subir a aplicacao:
 
 ```text
 GET /health
@@ -103,16 +123,57 @@ Resposta esperada:
 }
 ```
 
+## Autenticacao administrativa
+
+Crie o admin inicial antes do primeiro login:
+
+```powershell
+python -m app.db.seed
+```
+
+Faca login enviando `ADMIN_USERNAME` e `ADMIN_PASSWORD`:
+
+```text
+POST /api/v1/auth/login
+```
+
+Corpo `application/x-www-form-urlencoded`:
+
+```text
+username=admin&password=change_me
+```
+
+Resposta:
+
+```json
+{
+  "access_token": "jwt_token",
+  "token_type": "bearer",
+  "expires_in": 3600
+}
+```
+
+Use o token nas rotas protegidas:
+
+```text
+Authorization: Bearer jwt_token
+```
+
+Usuario autenticado:
+
+```text
+GET /api/v1/auth/me
+```
+
 ## Rodar testes
 
 ```powershell
 pytest
 ```
 
-## Observações
+## Observacoes
 
-- Não há frontend nesta etapa.
-- Não há OCR nesta etapa.
-- Não há integração com banco do CEST nesta etapa.
-- A autenticação administrativa foi apenas preparada na base do projeto para evolução posterior.
-
+- Nao ha frontend nesta etapa.
+- Nao ha OCR nesta etapa.
+- Nao ha integracao com banco do CEST nesta etapa.
+- A autenticacao administrativa usa JWT e senha com hash.

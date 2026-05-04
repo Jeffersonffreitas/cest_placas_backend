@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from enum import Enum
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
@@ -22,6 +23,24 @@ class AppException(Exception):
         super().__init__(message)
 
 
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, datetime | date):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, type):
+        return value.__name__
+    if isinstance(value, BaseException):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list | tuple | set):
+        return [_json_safe(item) for item in value]
+    return str(value)
+
+
 def _error_payload(
     request: Request,
     *,
@@ -34,7 +53,7 @@ def _error_payload(
         "error": {
             "code": code,
             "message": message,
-            "details": details,
+            "details": _json_safe(details),
         },
         "path": request.url.path,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -78,6 +97,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 code="http_error",
                 message=str(exc.detail),
             ),
+            headers=exc.headers,
         )
 
     @app.exception_handler(Exception)
@@ -91,4 +111,3 @@ def register_exception_handlers(app: FastAPI) -> None:
                 details={"exception": exc.__class__.__name__},
             ),
         )
-
