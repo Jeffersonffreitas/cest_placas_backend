@@ -12,6 +12,10 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - rota `/health`
 - autenticacao administrativa basica com JWT
 - rotas `/api/v1/auth/login` e `/api/v1/auth/me`
+- CRUD administrativo de alunos em `/api/v1/students`
+- CRUD administrativo de veiculos em `/api/v1/vehicles`
+- vinculo de 1 aluno para varios veiculos
+- busca de veiculo por placa em `/api/v1/vehicles/by-plate/{plate}`
 - tratamento padronizado de erros
 - estrutura preparada para evolucao do dominio
 
@@ -163,6 +167,120 @@ Usuario autenticado:
 
 ```text
 GET /api/v1/auth/me
+```
+
+## Alunos
+
+Todas as rotas de alunos exigem o header:
+
+```text
+Authorization: Bearer jwt_token
+```
+
+Criar aluno:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/students" `
+  -H "Authorization: Bearer jwt_token" `
+  -H "Content-Type: application/json" `
+  -d '{"registration_number":"20260001","full_name":"Maria Silva","email":"maria.silva@example.com","phone":"85999990000"}'
+```
+
+Listar alunos:
+
+```powershell
+curl "http://localhost:8000/api/v1/students" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+Consultar aluno por id:
+
+```powershell
+curl "http://localhost:8000/api/v1/students/1" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+Atualizar aluno:
+
+```powershell
+curl -X PUT "http://localhost:8000/api/v1/students/1" `
+  -H "Authorization: Bearer jwt_token" `
+  -H "Content-Type: application/json" `
+  -d '{"phone":"85888880000","is_active":true}'
+```
+
+Excluir aluno:
+
+```powershell
+curl -X DELETE "http://localhost:8000/api/v1/students/1" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+Alunos com veiculos vinculados nao podem ser excluidos antes da remocao dos
+veiculos.
+
+## Veiculos
+
+Todas as rotas de veiculos exigem o header:
+
+```text
+Authorization: Bearer jwt_token
+```
+
+A placa e normalizada antes de salvar e consultar. Exemplos como `abc-1234`,
+`ABC1234` e `abc 1234` sao tratados como `ABC1234`.
+
+Criar veiculo vinculado a um aluno:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/vehicles" `
+  -H "Authorization: Bearer jwt_token" `
+  -H "Content-Type: application/json" `
+  -d '{"student_id":1,"plate":"abc-1234","brand":"Fiat","model":"Mobi","color":"Branco"}'
+```
+
+Listar veiculos:
+
+```powershell
+curl "http://localhost:8000/api/v1/vehicles" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+Listar veiculos de um aluno:
+
+```powershell
+curl "http://localhost:8000/api/v1/vehicles?student_id=1" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+Buscar veiculo por placa:
+
+```powershell
+curl "http://localhost:8000/api/v1/vehicles/by-plate/abc-1234" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+Consultar veiculo por id:
+
+```powershell
+curl "http://localhost:8000/api/v1/vehicles/1" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+Atualizar veiculo:
+
+```powershell
+curl -X PUT "http://localhost:8000/api/v1/vehicles/1" `
+  -H "Authorization: Bearer jwt_token" `
+  -H "Content-Type: application/json" `
+  -d '{"color":"Preto","is_active":true}'
+```
+
+Excluir veiculo:
+
+```powershell
+curl -X DELETE "http://localhost:8000/api/v1/vehicles/1" `
+  -H "Authorization: Bearer jwt_token"
 ```
 
 ## Rodar testes
