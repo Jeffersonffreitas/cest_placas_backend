@@ -16,6 +16,8 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - CRUD administrativo de veiculos em `/api/v1/vehicles`
 - vinculo de 1 aluno para varios veiculos
 - busca de veiculo por placa em `/api/v1/vehicles/by-plate/{plate}`
+- leitura manual de placa em `/api/v1/plates/read-manual`
+- registro de eventos de acesso em leituras manuais
 - tratamento padronizado de erros
 - estrutura preparada para evolucao do dominio
 
@@ -281,6 +283,62 @@ Excluir veiculo:
 ```powershell
 curl -X DELETE "http://localhost:8000/api/v1/vehicles/1" `
   -H "Authorization: Bearer jwt_token"
+```
+
+## Leitura manual de placa
+
+A rota de leitura manual exige autenticacao administrativa:
+
+```text
+Authorization: Bearer jwt_token
+```
+
+Registrar leitura manual:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/plates/read-manual" `
+  -H "Authorization: Bearer jwt_token" `
+  -H "Content-Type: application/json" `
+  -d '{"plate":"ABC1D23"}'
+```
+
+Quando a placa normalizada for encontrada em veiculos, a resposta retorna
+`status` como `matched`, alem dos dados do veiculo e do aluno. Quando nao houver
+veiculo cadastrado, a resposta retorna `status` como `not_found` e registra o
+evento de acesso mesmo assim.
+
+Exemplo de resposta com veiculo encontrado:
+
+```json
+{
+  "id": 1,
+  "plate_input": "ABC1D23",
+  "plate_normalized": "ABC1D23",
+  "source": "manual",
+  "status": "matched",
+  "vehicle": {
+    "id": 1,
+    "student_id": 1,
+    "plate": "ABC1D23",
+    "brand": "Fiat",
+    "model": "Mobi",
+    "color": "Branco",
+    "is_active": true,
+    "created_at": "2026-05-12T15:30:00",
+    "updated_at": "2026-05-12T15:30:00"
+  },
+  "student": {
+    "id": 1,
+    "registration_number": "20260001",
+    "full_name": "Maria Silva",
+    "email": "maria.silva@example.com",
+    "phone": "85999990000",
+    "is_active": true,
+    "created_at": "2026-05-12T15:30:00",
+    "updated_at": "2026-05-12T15:30:00"
+  },
+  "created_at": "2026-05-12T15:30:00"
+}
 ```
 
 ## Rodar testes

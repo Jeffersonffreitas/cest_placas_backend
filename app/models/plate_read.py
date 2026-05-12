@@ -27,4 +27,3 @@ class PlateRead(TimestampedModel, Base):
     read_at: Mapped[datetime] = mapped_column(DateTime(), nullable=False)
 
     vehicle = relationship("Vehicle", back_populates="plate_reads")
-    access_events = relationship("AccessEvent", back_populates="plate_read")
