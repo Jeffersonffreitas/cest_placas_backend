@@ -18,6 +18,7 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - busca de veiculo por placa em `/api/v1/vehicles/by-plate/{plate}`
 - leitura manual de placa em `/api/v1/plates/read-manual`
 - registro de eventos de acesso em leituras manuais
+- consulta administrativa de eventos de acesso em `/api/v1/access-events`
 - tratamento padronizado de erros
 - estrutura preparada para evolucao do dominio
 
@@ -83,7 +84,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 ## Rodar migrations
 
 ```powershell
-alembic upgrade head
+python -m alembic upgrade head
 ```
 
 ## Criar admin inicial
@@ -107,7 +108,7 @@ alembic revision --autogenerate -m "descricao_da_migration"
 ## Subir a API
 
 ```powershell
-uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload
 ```
 
 ## Health check
@@ -341,10 +342,55 @@ Exemplo de resposta com veiculo encontrado:
 }
 ```
 
+## Eventos de acesso
+
+A rota de eventos de acesso exige autenticacao administrativa:
+
+```text
+Authorization: Bearer jwt_token
+```
+
+Listar eventos, ordenados do mais recente para o mais antigo:
+
+```powershell
+curl "http://localhost:8000/api/v1/access-events" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+Filtros e paginacao disponiveis no Swagger em:
+
+```text
+http://localhost:8000/docs
+```
+
+Parametros aceitos:
+
+```text
+skip=0
+limit=100
+plate=ABC1D23
+status=matched
+student_id=1
+vehicle_id=1
+date_from=2026-05-12T00:00:00
+date_to=2026-05-12T23:59:59
+```
+
+Exemplo combinando filtros:
+
+```powershell
+curl "http://localhost:8000/api/v1/access-events?plate=abc-1d23&status=matched&skip=0&limit=20" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+O filtro `plate` e normalizado antes da busca. Assim, `abc-1d23`,
+`ABC1D23` e `abc 1d23` consultam a placa `ABC1D23`. O filtro `status`
+aceita apenas `matched` e `not_found`.
+
 ## Rodar testes
 
 ```powershell
-pytest
+python -m pytest
 ```
 
 ## Observacoes

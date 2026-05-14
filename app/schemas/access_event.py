@@ -1,18 +1,15 @@
 from datetime import datetime
+from typing import Literal
 
-from pydantic import Field
-
-from app.schemas.access_event import AccessEventStatus
-from app.schemas.common import BaseSchema
+from app.schemas.common import ORMBaseSchema
 from app.schemas.student import StudentRead
 from app.schemas.vehicle import VehicleRead
 
 
-class ManualPlateReadRequest(BaseSchema):
-    plate: str = Field(min_length=1, max_length=20)
+AccessEventStatus = Literal["matched", "not_found"]
 
 
-class ManualPlateReadResponse(BaseSchema):
+class AccessEventRead(ORMBaseSchema):
     id: int
     plate_input: str
     plate_normalized: str
