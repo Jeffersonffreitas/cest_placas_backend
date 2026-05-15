@@ -21,3 +21,7 @@ class ManualPlateReadResponse(BaseSchema):
     vehicle: VehicleRead | None
     student: StudentRead | None
     created_at: datetime
+
+
+class ImagePlateReadResponse(ManualPlateReadResponse):
+    image_path: str

@@ -1,15 +1,31 @@
 import re
+import shutil
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
+
+from fastapi import UploadFile
 
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
 from app.models.access_event import AccessEvent
 from app.repositories import access_events as access_event_repository
+from app.repositories import plate_reads as plate_read_repository
 from app.repositories import vehicles as vehicle_repository
 from app.schemas.plate import ManualPlateReadRequest
 
 
 _PLATE_CLEANER = re.compile(r"[^A-Za-z0-9]")
+_PLATE_PATTERN = re.compile(r"[A-Z]{3}[0-9][A-Z0-9][0-9]{2}")
+PLATE_READ_UPLOAD_DIR = Path("uploads/plate_reads")
+
+
+@dataclass(frozen=True)
+class ImagePlateReadResult:
+    access_event: AccessEvent
+    image_path: str
 
 
 def normalize_plate(plate: str) -> str:
@@ -27,15 +43,13 @@ def normalize_and_validate_plate(plate: str) -> str:
     return normalized_plate
 
 
-def read_manual_plate(db: Session, payload: ManualPlateReadRequest) -> AccessEvent:
-    plate_input = payload.plate
-    plate_normalized = normalize_and_validate_plate(plate_input)
+def _create_access_event_for_plate(db: Session, plate_input: str, plate_normalized: str, source: str) -> AccessEvent:
     vehicle = vehicle_repository.get_vehicle_by_plate(db, plate_normalized)
 
     event_data: dict[str, object] = {
         "plate_input": plate_input,
         "plate_normalized": plate_normalized,
-        "source": "manual",
+        "source": source,
         "status": "not_found",
         "vehicle_id": None,
         "student_id": None,
@@ -49,7 +63,62 @@ def read_manual_plate(db: Session, payload: ManualPlateReadRequest) -> AccessEve
             },
         )
 
-    access_event = access_event_repository.create_access_event(db, event_data)
+    return access_event_repository.create_access_event(db, event_data)
+
+
+def read_manual_plate(db: Session, payload: ManualPlateReadRequest) -> AccessEvent:
+    plate_input = payload.plate
+    plate_normalized = normalize_and_validate_plate(plate_input)
+    access_event = _create_access_event_for_plate(db, plate_input, plate_normalized, "manual")
     db.commit()
     db.refresh(access_event)
     return access_event
+
+
+def infer_plate_from_filename(filename: str) -> str:
+    file_stem = Path(filename).stem
+    normalized_name = normalize_plate(file_stem)
+    match = _PLATE_PATTERN.search(normalized_name)
+    if match is not None:
+        return match.group(0)
+    return normalize_and_validate_plate(file_stem)
+
+
+def _safe_upload_filename(filename: str) -> str:
+    safe_name = Path(filename).name or "plate-image"
+    return f"{uuid4().hex}_{safe_name}"
+
+
+def _save_upload_file(file: UploadFile) -> str:
+    PLATE_READ_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    destination = PLATE_READ_UPLOAD_DIR / _safe_upload_filename(file.filename or "plate-image")
+    with destination.open("wb") as output_file:
+        shutil.copyfileobj(file.file, output_file)
+    return destination.as_posix()
+
+
+def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = None) -> ImagePlateReadResult:
+    plate_input = (
+        mock_plate.strip()
+        if mock_plate and mock_plate.strip()
+        else infer_plate_from_filename(file.filename or "")
+    )
+    plate_normalized = normalize_and_validate_plate(plate_input)
+    image_path = _save_upload_file(file)
+    vehicle = vehicle_repository.get_vehicle_by_plate(db, plate_normalized)
+
+    plate_read_repository.create_plate_read(
+        db,
+        {
+            "vehicle_id": vehicle.id if vehicle is not None else None,
+            "plate": plate_normalized,
+            "source": "upload",
+            "confidence": None,
+            "image_path": image_path,
+            "read_at": datetime.now(UTC).replace(tzinfo=None),
+        },
+    )
+    access_event = _create_access_event_for_plate(db, plate_input, plate_normalized, "upload")
+    db.commit()
+    db.refresh(access_event)
+    return ImagePlateReadResult(access_event=access_event, image_path=image_path)

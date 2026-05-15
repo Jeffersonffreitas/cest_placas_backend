@@ -17,7 +17,8 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - vinculo de 1 aluno para varios veiculos
 - busca de veiculo por placa em `/api/v1/vehicles/by-plate/{plate}`
 - leitura manual de placa em `/api/v1/plates/read-manual`
-- registro de eventos de acesso em leituras manuais
+- upload de imagem para leitura simulada de placa em `/api/v1/plates/read-image`
+- registro de eventos de acesso em leituras manuais e uploads
 - consulta administrativa de eventos de acesso em `/api/v1/access-events`
 - tratamento padronizado de erros
 - estrutura preparada para evolucao do dominio
@@ -339,6 +340,66 @@ Exemplo de resposta com veiculo encontrado:
     "updated_at": "2026-05-12T15:30:00"
   },
   "created_at": "2026-05-12T15:30:00"
+}
+```
+
+## Leitura de placa por upload de imagem
+
+A rota de upload exige autenticacao administrativa:
+
+```text
+Authorization: Bearer jwt_token
+```
+
+Registrar leitura a partir de uma imagem:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/plates/read-image" `
+  -H "Authorization: Bearer jwt_token" `
+  -F "file=@C:\caminho\para\ABC1D23.jpg" `
+  -F "mock_plate=ABC1D23"
+```
+
+O campo `file` e obrigatorio. O campo `mock_plate` e opcional. Quando
+`mock_plate` for enviado, ele sera usado como placa reconhecida. Quando nao for
+enviado, a API tenta inferir a placa a partir do nome do arquivo.
+
+Ainda nao ha OCR real nesta etapa. A leitura salva a imagem em
+`uploads/plate_reads/`, registra uma linha em `plate_reads` com `image_path` e
+tambem registra um evento de acesso com `source` igual a `upload`.
+
+Exemplo de resposta:
+
+```json
+{
+  "id": 2,
+  "plate_input": "ABC1D23",
+  "plate_normalized": "ABC1D23",
+  "source": "upload",
+  "status": "matched",
+  "vehicle": {
+    "id": 1,
+    "student_id": 1,
+    "plate": "ABC1D23",
+    "brand": "Fiat",
+    "model": "Mobi",
+    "color": "Branco",
+    "is_active": true,
+    "created_at": "2026-05-12T15:30:00",
+    "updated_at": "2026-05-12T15:30:00"
+  },
+  "student": {
+    "id": 1,
+    "registration_number": "20260001",
+    "full_name": "Maria Silva",
+    "email": "maria.silva@example.com",
+    "phone": "85999990000",
+    "is_active": true,
+    "created_at": "2026-05-12T15:30:00",
+    "updated_at": "2026-05-12T15:30:00"
+  },
+  "image_path": "uploads/plate_reads/arquivo.jpg",
+  "created_at": "2026-05-12T15:31:00"
 }
 ```
 
