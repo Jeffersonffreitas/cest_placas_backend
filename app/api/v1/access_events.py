@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentAdminUser
 from app.db.deps import get_db
-from app.schemas.access_event import AccessEventRead, AccessEventStatus
+from app.schemas.access_event import AccessEventRead, AccessEventSource, AccessEventStatus
 from app.services import access_events as access_event_service
 
 
@@ -25,6 +25,7 @@ def list_access_events(
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 100,
     plate: Annotated[str | None, Query(min_length=1, max_length=20)] = None,
+    source: AccessEventSource | None = None,
     access_status: Annotated[AccessEventStatus | None, Query(alias="status")] = None,
     student_id: Annotated[int | None, Query(gt=0)] = None,
     vehicle_id: Annotated[int | None, Query(gt=0)] = None,
@@ -37,6 +38,7 @@ def list_access_events(
         skip=skip,
         limit=limit,
         plate=plate,
+        source=source,
         status=access_status,
         student_id=student_id,
         vehicle_id=vehicle_id,

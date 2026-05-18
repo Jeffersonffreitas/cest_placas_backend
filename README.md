@@ -430,6 +430,7 @@ Parametros aceitos:
 skip=0
 limit=100
 plate=ABC1D23
+source=manual
 status=matched
 student_id=1
 vehicle_id=1
@@ -446,7 +447,8 @@ curl "http://localhost:8000/api/v1/access-events?plate=abc-1d23&status=matched&s
 
 O filtro `plate` e normalizado antes da busca. Assim, `abc-1d23`,
 `ABC1D23` e `abc 1d23` consultam a placa `ABC1D23`. O filtro `status`
-aceita apenas `matched` e `not_found`.
+aceita apenas `matched` e `not_found`. O filtro `source` aceita `manual`
+e `upload`.
 
 ## Rodar testes
 

@@ -10,6 +10,7 @@ class AccessEvent(Base):
     __tablename__ = "access_events"
     __table_args__ = (
         Index("ix_access_events_plate_normalized", "plate_normalized"),
+        Index("ix_access_events_source", "source"),
         Index("ix_access_events_status", "status"),
         Index("ix_access_events_student_id", "student_id"),
         Index("ix_access_events_vehicle_id", "vehicle_id"),

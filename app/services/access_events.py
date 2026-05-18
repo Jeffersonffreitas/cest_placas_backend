@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import AppException
 from app.models.access_event import AccessEvent
 from app.repositories import access_events as access_event_repository
-from app.schemas.access_event import AccessEventStatus
+from app.schemas.access_event import AccessEventSource, AccessEventStatus
 from app.services.plates import normalize_and_validate_plate
 
 
@@ -15,6 +15,7 @@ def list_access_events(
     skip: int = 0,
     limit: int = 100,
     plate: str | None = None,
+    source: AccessEventSource | None = None,
     status: AccessEventStatus | None = None,
     student_id: int | None = None,
     vehicle_id: int | None = None,
@@ -34,6 +35,7 @@ def list_access_events(
         skip=skip,
         limit=limit,
         plate_normalized=plate_normalized,
+        source=source,
         status=status,
         student_id=student_id,
         vehicle_id=vehicle_id,

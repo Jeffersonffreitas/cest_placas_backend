@@ -62,13 +62,14 @@ def _add_access_event(
     plate_normalized: str,
     status: str,
     created_at: datetime,
+    source: str = "manual",
     student_id: int | None = None,
     vehicle_id: int | None = None,
 ) -> AccessEvent:
     access_event = AccessEvent(
         plate_input=plate_input,
         plate_normalized=plate_normalized,
-        source="manual",
+        source=source,
         status=status,
         student_id=student_id,
         vehicle_id=vehicle_id,
@@ -181,6 +182,66 @@ def test_access_events_list_filters_plate_status_student_and_vehicle(
     )
     assert vehicle_response.status_code == 200
     assert [item["id"] for item in vehicle_response.json()] == [second_event.id]
+
+
+def test_access_events_list_filters_source_manual(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    headers = _admin_headers(client)
+    expected = _add_access_event(
+        db_session,
+        plate_input="AAA1A11",
+        plate_normalized="AAA1A11",
+        source="manual",
+        status="not_found",
+        created_at=datetime(2026, 5, 12, 8, 0, 0),
+    )
+    _add_access_event(
+        db_session,
+        plate_input="BBB2B22",
+        plate_normalized="BBB2B22",
+        source="upload",
+        status="not_found",
+        created_at=datetime(2026, 5, 12, 9, 0, 0),
+    )
+
+    response = client.get("/api/v1/access-events?source=manual", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body] == [expected.id]
+    assert body[0]["source"] == "manual"
+
+
+def test_access_events_list_filters_source_upload(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    headers = _admin_headers(client)
+    _add_access_event(
+        db_session,
+        plate_input="AAA1A11",
+        plate_normalized="AAA1A11",
+        source="manual",
+        status="not_found",
+        created_at=datetime(2026, 5, 12, 8, 0, 0),
+    )
+    expected = _add_access_event(
+        db_session,
+        plate_input="BBB2B22",
+        plate_normalized="BBB2B22",
+        source="upload",
+        status="not_found",
+        created_at=datetime(2026, 5, 12, 9, 0, 0),
+    )
+
+    response = client.get("/api/v1/access-events?source=upload", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body] == [expected.id]
+    assert body[0]["source"] == "upload"
 
 
 def test_access_events_list_filters_date_range_and_validates_range(

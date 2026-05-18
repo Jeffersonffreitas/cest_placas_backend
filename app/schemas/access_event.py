@@ -7,13 +7,14 @@ from app.schemas.vehicle import VehicleRead
 
 
 AccessEventStatus = Literal["matched", "not_found"]
+AccessEventSource = Literal["manual", "upload"]
 
 
 class AccessEventRead(ORMBaseSchema):
     id: int
     plate_input: str
     plate_normalized: str
-    source: str
+    source: AccessEventSource
     status: AccessEventStatus
     vehicle: VehicleRead | None
     student: StudentRead | None

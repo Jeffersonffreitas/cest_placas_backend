@@ -12,6 +12,7 @@ def list_access_events(
     skip: int = 0,
     limit: int = 100,
     plate_normalized: str | None = None,
+    source: str | None = None,
     status: str | None = None,
     student_id: int | None = None,
     vehicle_id: int | None = None,
@@ -24,6 +25,8 @@ def list_access_events(
     )
     if plate_normalized is not None:
         statement = statement.where(AccessEvent.plate_normalized == plate_normalized)
+    if source is not None:
+        statement = statement.where(AccessEvent.source == source)
     if status is not None:
         statement = statement.where(AccessEvent.status == status)
     if student_id is not None:
