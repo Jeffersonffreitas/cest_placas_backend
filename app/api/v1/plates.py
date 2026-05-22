@@ -67,5 +67,6 @@ def read_image_plate(
         vehicle=VehicleRead.model_validate(access_event.vehicle) if access_event.vehicle else None,
         student=StudentRead.model_validate(access_event.student) if access_event.student else None,
         image_path=result.image_path,
+        confidence=result.confidence,
         created_at=access_event.created_at,
     )

@@ -17,7 +17,7 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - vinculo de 1 aluno para varios veiculos
 - busca de veiculo por placa em `/api/v1/vehicles/by-plate/{plate}`
 - leitura manual de placa em `/api/v1/plates/read-manual`
-- upload de imagem para leitura simulada de placa em `/api/v1/plates/read-image`
+- upload de imagem com OCR para leitura de placa em `/api/v1/plates/read-image`
 - registro de eventos de acesso em leituras manuais e uploads
 - consulta administrativa de eventos de acesso em `/api/v1/access-events`
 - tratamento padronizado de erros
@@ -32,6 +32,8 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - Pydantic v2
 - MySQL
 - PyMySQL
+- Pillow
+- pytesseract
 - Pytest
 
 ## Estrutura
@@ -46,11 +48,12 @@ tests/
 
 1. Crie e ative um ambiente virtual.
 2. Instale as dependencias.
-3. Crie um arquivo `.env` com base em `.env.example`.
-4. Ajuste a `DATABASE_URL` para apontar para o seu MySQL.
-5. Rode as migrations.
-6. Crie o admin inicial.
-7. Suba a API.
+3. Instale o executavel do Tesseract OCR no sistema.
+4. Crie um arquivo `.env` com base em `.env.example`.
+5. Ajuste a `DATABASE_URL` para apontar para o seu MySQL.
+6. Rode as migrations.
+7. Crie o admin inicial.
+8. Suba a API.
 
 ## Comandos de instalacao
 
@@ -361,12 +364,18 @@ curl -X POST "http://localhost:8000/api/v1/plates/read-image" `
 ```
 
 O campo `file` e obrigatorio. O campo `mock_plate` e opcional. Quando
-`mock_plate` for enviado, ele sera usado como placa reconhecida. Quando nao for
-enviado, a API tenta inferir a placa a partir do nome do arquivo.
+`mock_plate` for enviado, ele sera usado como placa reconhecida, preservando o
+fluxo de testes e simulacoes. Quando nao for enviado, a API salva a imagem,
+aplica um pre-processamento simples e tenta reconhecer a placa com OCR.
 
-Ainda nao ha OCR real nesta etapa. A leitura salva a imagem em
-`uploads/plate_reads/`, registra uma linha em `plate_reads` com `image_path` e
-tambem registra um evento de acesso com `source` igual a `upload`.
+A leitura salva a imagem em `uploads/plate_reads/`, registra uma linha em
+`plate_reads` com `image_path`, `source` igual a `upload` e `confidence` quando
+o OCR fornecer essa informacao. Depois registra normalmente um evento de acesso
+com `source` igual a `upload`.
+
+Sem `mock_plate`, o ambiente precisa ter o Tesseract OCR instalado e disponivel
+no PATH do sistema, alem das dependencias Python instaladas por
+`requirements.txt`.
 
 Exemplo de resposta:
 
@@ -399,6 +408,7 @@ Exemplo de resposta:
     "updated_at": "2026-05-12T15:30:00"
   },
   "image_path": "uploads/plate_reads/arquivo.jpg",
+  "confidence": 91.42,
   "created_at": "2026-05-12T15:31:00"
 }
 ```

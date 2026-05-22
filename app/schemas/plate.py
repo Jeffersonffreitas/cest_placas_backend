@@ -25,3 +25,4 @@ class ManualPlateReadResponse(BaseSchema):
 
 class ImagePlateReadResponse(ManualPlateReadResponse):
     image_path: str
+    confidence: float | None

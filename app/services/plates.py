@@ -2,6 +2,7 @@ import re
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,6 +11,7 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
+from app.integrations.ocr import extract_plate_from_image
 from app.models.access_event import AccessEvent
 from app.repositories import access_events as access_event_repository
 from app.repositories import plate_reads as plate_read_repository
@@ -18,7 +20,6 @@ from app.schemas.plate import ManualPlateReadRequest
 
 
 _PLATE_CLEANER = re.compile(r"[^A-Za-z0-9]")
-_PLATE_PATTERN = re.compile(r"[A-Z]{3}[0-9][A-Z0-9][0-9]{2}")
 PLATE_READ_UPLOAD_DIR = Path("uploads/plate_reads")
 
 
@@ -26,6 +27,7 @@ PLATE_READ_UPLOAD_DIR = Path("uploads/plate_reads")
 class ImagePlateReadResult:
     access_event: AccessEvent
     image_path: str
+    confidence: float | None
 
 
 def normalize_plate(plate: str) -> str:
@@ -75,15 +77,6 @@ def read_manual_plate(db: Session, payload: ManualPlateReadRequest) -> AccessEve
     return access_event
 
 
-def infer_plate_from_filename(filename: str) -> str:
-    file_stem = Path(filename).stem
-    normalized_name = normalize_plate(file_stem)
-    match = _PLATE_PATTERN.search(normalized_name)
-    if match is not None:
-        return match.group(0)
-    return normalize_and_validate_plate(file_stem)
-
-
 def _safe_upload_filename(filename: str) -> str:
     safe_name = Path(filename).name or "plate-image"
     return f"{uuid4().hex}_{safe_name}"
@@ -97,14 +90,23 @@ def _save_upload_file(file: UploadFile) -> str:
     return destination.as_posix()
 
 
+def _confidence_for_storage(confidence: float | None) -> Decimal | None:
+    if confidence is None:
+        return None
+    return Decimal(str(confidence)).quantize(Decimal("0.01"))
+
+
 def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = None) -> ImagePlateReadResult:
-    plate_input = (
-        mock_plate.strip()
-        if mock_plate and mock_plate.strip()
-        else infer_plate_from_filename(file.filename or "")
-    )
-    plate_normalized = normalize_and_validate_plate(plate_input)
     image_path = _save_upload_file(file)
+    confidence: float | None = None
+    if mock_plate and mock_plate.strip():
+        plate_input = mock_plate.strip()
+    else:
+        ocr_result = extract_plate_from_image(image_path)
+        plate_input = ocr_result.plate_text
+        confidence = ocr_result.confidence
+
+    plate_normalized = normalize_and_validate_plate(plate_input)
     vehicle = vehicle_repository.get_vehicle_by_plate(db, plate_normalized)
 
     plate_read_repository.create_plate_read(
@@ -113,7 +115,7 @@ def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = Non
             "vehicle_id": vehicle.id if vehicle is not None else None,
             "plate": plate_normalized,
             "source": "upload",
-            "confidence": None,
+            "confidence": _confidence_for_storage(confidence),
             "image_path": image_path,
             "read_at": datetime.now(UTC).replace(tzinfo=None),
         },
@@ -121,4 +123,4 @@ def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = Non
     access_event = _create_access_event_for_plate(db, plate_input, plate_normalized, "upload")
     db.commit()
     db.refresh(access_event)
-    return ImagePlateReadResult(access_event=access_event, image_path=image_path)
+    return ImagePlateReadResult(access_event=access_event, image_path=image_path, confidence=confidence)
