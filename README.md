@@ -366,7 +366,13 @@ curl -X POST "http://localhost:8000/api/v1/plates/read-image" `
 O campo `file` e obrigatorio. O campo `mock_plate` e opcional. Quando
 `mock_plate` for enviado, ele sera usado como placa reconhecida, preservando o
 fluxo de testes e simulacoes. Quando nao for enviado, a API salva a imagem,
-aplica um pre-processamento simples e tenta reconhecer a placa com OCR.
+aplica pre-processamentos de contraste, nitidez, escala, binarizacao e inversao
+de tons, e tenta reconhecer a placa com OCR.
+
+O OCR tambem normaliza candidatos de placa e corrige confusoes comuns por
+posicao do padrao brasileiro, como `0/O`, `1/I`, `8/B`, `5/S` e `2/Z`. Assim,
+ruidos frequentes do Tesseract podem ser convertidos para placas validas antes
+da consulta em veiculos.
 
 A leitura salva a imagem em `uploads/plate_reads/`, registra uma linha em
 `plate_reads` com `image_path`, `source` igual a `upload` e `confidence` quando
@@ -469,6 +475,7 @@ python -m pytest
 ## Observacoes
 
 - Nao ha frontend nesta etapa.
-- Nao ha OCR nesta etapa.
+- Ha OCR real por upload de imagem, com suporte a `mock_plate` para testes e
+  simulacoes.
 - Nao ha integracao com banco do CEST nesta etapa.
 - A autenticacao administrativa usa JWT e senha com hash.

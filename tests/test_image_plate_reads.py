@@ -156,3 +156,25 @@ def test_image_plate_read_uses_ocr_when_mock_plate_is_missing_and_registers_not_
 def test_extract_plate_candidate_accepts_brazilian_patterns_and_common_ocr_noise() -> None:
     assert extract_plate_candidate(["entrada ", "abc1d23"]) == "ABC1D23"
     assert extract_plate_candidate(["placa ABClD23"]) == "ABC1D23"
+
+
+@pytest.mark.parametrize(
+    ("ocr_texts", "expected_plate"),
+    [
+        (["placa AB01D23"], "ABO1D23"),
+        (["placa A8C1D23"], "ABC1D23"),
+        (["placa ABCID23"], "ABC1D23"),
+        (["placa ABC1D2O"], "ABC1D20"),
+        (["placa ABC1D2S"], "ABC1D25"),
+        (["placa ABC1DZ3"], "ABC1D23"),
+    ],
+)
+def test_extract_plate_candidate_corrects_common_ocr_confusions(
+    ocr_texts: list[str],
+    expected_plate: str,
+) -> None:
+    assert extract_plate_candidate(ocr_texts) == expected_plate
+
+
+def test_extract_plate_candidate_accepts_old_brazilian_plate_pattern() -> None:
+    assert extract_plate_candidate(["entrada ABC1234"]) == "ABC1234"
