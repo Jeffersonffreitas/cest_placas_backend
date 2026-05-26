@@ -21,6 +21,7 @@ from app.schemas.plate import ManualPlateReadRequest
 
 _PLATE_CLEANER = re.compile(r"[^A-Za-z0-9]")
 PLATE_READ_UPLOAD_DIR = Path("uploads/plate_reads")
+MIN_OCR_CONFIDENCE = 70.0
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,25 @@ def _create_access_event_for_plate(db: Session, plate_input: str, plate_normaliz
     return access_event_repository.create_access_event(db, event_data)
 
 
+def _create_unmatched_access_event_for_plate(
+    db: Session,
+    plate_input: str,
+    plate_normalized: str,
+    source: str,
+) -> AccessEvent:
+    return access_event_repository.create_access_event(
+        db,
+        {
+            "plate_input": plate_input,
+            "plate_normalized": plate_normalized,
+            "source": source,
+            "status": "not_found",
+            "vehicle_id": None,
+            "student_id": None,
+        },
+    )
+
+
 def read_manual_plate(db: Session, payload: ManualPlateReadRequest) -> AccessEvent:
     plate_input = payload.plate
     plate_normalized = normalize_and_validate_plate(plate_input)
@@ -96,18 +116,24 @@ def _confidence_for_storage(confidence: float | None) -> Decimal | None:
     return Decimal(str(confidence)).quantize(Decimal("0.01"))
 
 
+def _is_ocr_confidence_sufficient(confidence: float | None) -> bool:
+    return confidence is not None and confidence >= MIN_OCR_CONFIDENCE
+
+
 def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = None) -> ImagePlateReadResult:
     image_path = _save_upload_file(file)
     confidence: float | None = None
+    confidence_is_sufficient = True
     if mock_plate and mock_plate.strip():
         plate_input = mock_plate.strip()
     else:
         ocr_result = extract_plate_from_image(image_path)
         plate_input = ocr_result.plate_text
         confidence = ocr_result.confidence
+        confidence_is_sufficient = _is_ocr_confidence_sufficient(confidence)
 
     plate_normalized = normalize_and_validate_plate(plate_input)
-    vehicle = vehicle_repository.get_vehicle_by_plate(db, plate_normalized)
+    vehicle = vehicle_repository.get_vehicle_by_plate(db, plate_normalized) if confidence_is_sufficient else None
 
     plate_read_repository.create_plate_read(
         db,
@@ -120,7 +146,10 @@ def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = Non
             "read_at": datetime.now(UTC).replace(tzinfo=None),
         },
     )
-    access_event = _create_access_event_for_plate(db, plate_input, plate_normalized, "upload")
+    if confidence_is_sufficient:
+        access_event = _create_access_event_for_plate(db, plate_input, plate_normalized, "upload")
+    else:
+        access_event = _create_unmatched_access_event_for_plate(db, plate_input, plate_normalized, "upload")
     db.commit()
     db.refresh(access_event)
     return ImagePlateReadResult(access_event=access_event, image_path=image_path, confidence=confidence)

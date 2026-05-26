@@ -153,6 +153,120 @@ def test_image_plate_read_uses_ocr_when_mock_plate_is_missing_and_registers_not_
     assert float(plate_read.confidence) == 87.54
 
 
+def test_image_plate_read_with_sufficient_ocr_confidence_matches_vehicle(
+    client: TestClient,
+    db_session: Session,
+    upload_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = _admin_headers(client)
+    student = _create_student(client, headers)
+
+    vehicle_response = client.post(
+        "/api/v1/vehicles",
+        json={
+            "student_id": student["id"],
+            "plate": "zzz-9z99",
+            "brand": "Honda",
+            "model": "Fit",
+            "color": "Prata",
+        },
+        headers=headers,
+    )
+    assert vehicle_response.status_code == 201
+    vehicle = vehicle_response.json()
+
+    def fake_extract_plate_from_image(image_path: str) -> OCRPlateResult:
+        assert image_path.startswith(upload_dir.as_posix())
+        return OCRPlateResult(plate_text="ZZZ9Z99", confidence=70.0, raw_text="ZZZ9Z99")
+
+    monkeypatch.setattr(plate_service, "extract_plate_from_image", fake_extract_plate_from_image)
+
+    response = client.post(
+        "/api/v1/plates/read-image",
+        files={"file": ("entrada.png", b"image-with-known-plate", "image/png")},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["plate_input"] == "ZZZ9Z99"
+    assert body["plate_normalized"] == "ZZZ9Z99"
+    assert body["status"] == "matched"
+    assert body["vehicle"]["id"] == vehicle["id"]
+    assert body["student"]["id"] == student["id"]
+    assert body["confidence"] == 70.0
+
+    access_event = db_session.scalars(select(AccessEvent)).one()
+    assert access_event.status == "matched"
+    assert access_event.vehicle_id == vehicle["id"]
+    assert access_event.student_id == student["id"]
+
+    plate_read = db_session.scalars(select(PlateRead)).one()
+    assert plate_read.plate == "ZZZ9Z99"
+    assert plate_read.vehicle_id == vehicle["id"]
+    assert float(plate_read.confidence) == 70.0
+
+
+def test_image_plate_read_with_low_ocr_confidence_registers_safe_not_found(
+    client: TestClient,
+    db_session: Session,
+    upload_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = _admin_headers(client)
+    student = _create_student(client, headers)
+
+    vehicle_response = client.post(
+        "/api/v1/vehicles",
+        json={
+            "student_id": student["id"],
+            "plate": "low-1a23",
+            "brand": "Toyota",
+            "model": "Corolla",
+            "color": "Cinza",
+        },
+        headers=headers,
+    )
+    assert vehicle_response.status_code == 201
+
+    def fake_extract_plate_from_image(image_path: str) -> OCRPlateResult:
+        assert image_path.startswith(upload_dir.as_posix())
+        return OCRPlateResult(plate_text="LOW1A23", confidence=69.99, raw_text="LOW1A23")
+
+    monkeypatch.setattr(plate_service, "extract_plate_from_image", fake_extract_plate_from_image)
+
+    response = client.post(
+        "/api/v1/plates/read-image",
+        files={"file": ("baixa-confianca.png", b"low-confidence-image", "image/png")},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["plate_input"] == "LOW1A23"
+    assert body["plate_normalized"] == "LOW1A23"
+    assert body["source"] == "upload"
+    assert body["status"] == "not_found"
+    assert body["vehicle"] is None
+    assert body["student"] is None
+    assert body["confidence"] == 69.99
+
+    access_event = db_session.scalars(select(AccessEvent)).one()
+    assert access_event.plate_normalized == "LOW1A23"
+    assert access_event.source == "upload"
+    assert access_event.status == "not_found"
+    assert access_event.vehicle_id is None
+    assert access_event.student_id is None
+
+    plate_read = db_session.scalars(select(PlateRead)).one()
+    assert plate_read.plate == "LOW1A23"
+    assert plate_read.source == "upload"
+    assert plate_read.vehicle_id is None
+    assert plate_read.image_path == body["image_path"]
+    assert float(plate_read.confidence) == 69.99
+
+
 def test_extract_plate_candidate_accepts_brazilian_patterns_and_common_ocr_noise() -> None:
     assert extract_plate_candidate(["entrada ", "abc1d23"]) == "ABC1D23"
     assert extract_plate_candidate(["placa ABClD23"]) == "ABC1D23"

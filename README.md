@@ -374,6 +374,13 @@ posicao do padrao brasileiro, como `0/O`, `1/I`, `8/B`, `5/S` e `2/Z`. Assim,
 ruidos frequentes do Tesseract podem ser convertidos para placas validas antes
 da consulta em veiculos.
 
+Para o OCR real, a API exige confianca minima de `70.0` em uma escala de 0 a
+100. Leituras com confianca ausente ou abaixo desse valor continuam sendo
+registradas em `plate_reads` e geram evento em `access_events`, mas sao
+tratadas de forma segura como `status` igual a `not_found`, sem vincular
+veiculo ou aluno. Quando `mock_plate` for enviado, essa regra de confianca nao
+e aplicada, preservando o fluxo de testes e simulacoes.
+
 A leitura salva a imagem em `uploads/plate_reads/`, registra uma linha em
 `plate_reads` com `image_path`, `source` igual a `upload` e `confidence` quando
 o OCR fornecer essa informacao. Depois registra normalmente um evento de acesso
