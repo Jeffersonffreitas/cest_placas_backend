@@ -1,10 +1,12 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.integrations import ocr
 from app.integrations.ocr import OCRPlateResult, extract_plate_candidate
 from app.models.access_event import AccessEvent
 from app.models.plate_read import PlateRead
@@ -267,9 +269,91 @@ def test_image_plate_read_with_low_ocr_confidence_registers_safe_not_found(
     assert float(plate_read.confidence) == 69.99
 
 
+def test_extract_plate_from_good_image_reads_direct_plate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from PIL import Image
+    import pytesseract
+
+    image_path = tmp_path / "boa.png"
+    Image.new("RGB", (80, 30), "white").save(image_path)
+    monkeypatch.setattr(ocr, "_preprocess_images", lambda image: [image])
+    monkeypatch.setattr(ocr, "_OCR_CONFIGS", ("good-config",))
+
+    def fake_image_to_data(image: object, config: str, output_type: object) -> dict[str, list[str]]:
+        assert config == "good-config"
+        return {"text": ["", "ABC1D23"], "conf": ["-1", "91.42"]}
+
+    monkeypatch.setattr(pytesseract, "image_to_data", fake_image_to_data)
+
+    result = ocr.extract_plate_from_image(str(image_path))
+
+    assert result.plate_text == "ABC1D23"
+    assert result.confidence == 91.42
+    assert result.raw_text == "ABC1D23"
+
+
+def test_extract_plate_from_difficult_image_prefers_consensus_over_single_high_confidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from PIL import Image
+    import pytesseract
+
+    image_path = tmp_path / "KRM4T68.png"
+    Image.new("RGB", (80, 30), "white").save(image_path)
+    monkeypatch.setattr(ocr, "_preprocess_images", lambda image: [image, image, image])
+    monkeypatch.setattr(ocr, "_OCR_CONFIGS", ("difficult-config",))
+    responses = iter(
+        [
+            {"text": ["KRM4T88"], "conf": ["94.0"]},
+            {"text": ["KRMAT68"], "conf": ["83.0"]},
+            {"text": ["KRM4T68"], "conf": ["74.0"]},
+        ],
+    )
+
+    def fake_image_to_data(image: object, config: str, output_type: object) -> dict[str, list[str]]:
+        assert config == "difficult-config"
+        return next(responses)
+
+    monkeypatch.setattr(pytesseract, "image_to_data", fake_image_to_data)
+
+    result = ocr.extract_plate_from_image(str(image_path))
+
+    assert result.plate_text == "KRM4T68"
+    assert result.confidence == 83.0
+
+
+def test_resolve_tesseract_command_prefers_known_windows_x86_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_path = r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"
+    monkeypatch.setattr(ocr.sys, "platform", "win32")
+    monkeypatch.setattr(ocr.shutil, "which", lambda command: r"C:\Tesseract-OCR\tesseract.exe")
+    monkeypatch.setattr(ocr, "_is_existing_file", lambda path: path == expected_path)
+
+    assert ocr._resolve_tesseract_command() == expected_path
+
+
+def test_configure_tesseract_executable_uses_resolved_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_path = r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"
+    pytesseract_module = SimpleNamespace(
+        pytesseract=SimpleNamespace(tesseract_cmd="tesseract"),
+    )
+    monkeypatch.setattr(ocr, "_resolve_tesseract_command", lambda: expected_path)
+
+    ocr._configure_tesseract_executable(pytesseract_module)
+
+    assert pytesseract_module.pytesseract.tesseract_cmd == expected_path
+
+
 def test_extract_plate_candidate_accepts_brazilian_patterns_and_common_ocr_noise() -> None:
     assert extract_plate_candidate(["entrada ", "abc1d23"]) == "ABC1D23"
     assert extract_plate_candidate(["placa ABClD23"]) == "ABC1D23"
+    assert extract_plate_candidate(["placa KRMAT68"]) == "KRM4T68"
 
 
 @pytest.mark.parametrize(

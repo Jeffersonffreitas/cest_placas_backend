@@ -367,12 +367,16 @@ O campo `file` e obrigatorio. O campo `mock_plate` e opcional. Quando
 `mock_plate` for enviado, ele sera usado como placa reconhecida, preservando o
 fluxo de testes e simulacoes. Quando nao for enviado, a API salva a imagem,
 aplica pre-processamentos de contraste, nitidez, escala, binarizacao e inversao
-de tons, e tenta reconhecer a placa com OCR.
+de tons, e tenta reconhecer a placa com OCR usando multiplas configuracoes do
+Tesseract.
 
 O OCR tambem normaliza candidatos de placa e corrige confusoes comuns por
-posicao do padrao brasileiro, como `0/O`, `1/I`, `8/B`, `5/S` e `2/Z`. Assim,
-ruidos frequentes do Tesseract podem ser convertidos para placas validas antes
-da consulta em veiculos.
+posicao do padrao brasileiro, como `0/O`, `1/I`, `8/B`, `5/S`, `2/Z` e `A/4`.
+Assim, ruidos frequentes do Tesseract podem ser convertidos para placas validas
+antes da consulta em veiculos. Quando houver mais de uma candidata, a selecao
+prioriza placas em padrao brasileiro que aparecem de forma consistente entre as
+tentativas de pre-processamento, em vez de depender apenas de uma leitura isolada
+com confianca alta.
 
 Para o OCR real, a API exige confianca minima de `70.0` em uma escala de 0 a
 100. Leituras com confianca ausente ou abaixo desse valor continuam sendo
@@ -386,9 +390,12 @@ A leitura salva a imagem em `uploads/plate_reads/`, registra uma linha em
 o OCR fornecer essa informacao. Depois registra normalmente um evento de acesso
 com `source` igual a `upload`.
 
-Sem `mock_plate`, o ambiente precisa ter o Tesseract OCR instalado e disponivel
-no PATH do sistema, alem das dependencias Python instaladas por
-`requirements.txt`.
+Sem `mock_plate`, o ambiente precisa ter o Tesseract OCR instalado, alem das
+dependencias Python instaladas por `requirements.txt`. No Windows, a integracao
+procura automaticamente o executavel em
+`C:\Program Files (x86)\Tesseract-OCR\tesseract.exe`, depois em
+`C:\Program Files\Tesseract-OCR\tesseract.exe`, e por fim usa o Tesseract
+disponivel no PATH.
 
 Exemplo de resposta:
 
