@@ -19,6 +19,7 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - leitura manual de placa em `/api/v1/plates/read-manual`
 - upload de imagem com OCR para leitura de placa em `/api/v1/plates/read-image`
 - registro de eventos de acesso em leituras manuais e uploads
+- decisao operacional nas respostas de leitura de placa
 - consulta administrativa de eventos de acesso em `/api/v1/access-events`
 - tratamento padronizado de erros
 - estrutura preparada para evolucao do dominio
@@ -312,6 +313,23 @@ Quando a placa normalizada for encontrada em veiculos, a resposta retorna
 veiculo cadastrado, a resposta retorna `status` como `not_found` e registra o
 evento de acesso mesmo assim.
 
+As respostas de leitura tambem retornam `operational_decision`, pensado para o
+uso na portaria:
+
+```text
+ACESSO_LIBERADO       placa encontrada com veiculo e aluno ativos
+VEICULO_NAO_CADASTRADO placa valida, mas sem cadastro de veiculo
+OCR_BAIXA_CONFIANCA   OCR real abaixo da confianca minima
+CADASTRO_INATIVO      placa encontrada, mas veiculo ou aluno inativo
+```
+
+Em erros de leitura, a decisao aparece em `error.details.operational_decision`:
+
+```text
+PLACA_INVALIDA formato de placa invalido
+ERRO_OCR       OCR indisponivel, imagem invalida ou placa nao reconhecida
+```
+
 Exemplo de resposta com veiculo encontrado:
 
 ```json
@@ -321,6 +339,7 @@ Exemplo de resposta com veiculo encontrado:
   "plate_normalized": "ABC1D23",
   "source": "manual",
   "status": "matched",
+  "operational_decision": "ACESSO_LIBERADO",
   "vehicle": {
     "id": 1,
     "student_id": 1,
@@ -343,6 +362,22 @@ Exemplo de resposta com veiculo encontrado:
     "updated_at": "2026-05-12T15:30:00"
   },
   "created_at": "2026-05-12T15:30:00"
+}
+```
+
+Exemplo sem veiculo cadastrado:
+
+```json
+{
+  "id": 2,
+  "plate_input": "ZZZ9Z99",
+  "plate_normalized": "ZZZ9Z99",
+  "source": "manual",
+  "status": "not_found",
+  "operational_decision": "VEICULO_NAO_CADASTRADO",
+  "vehicle": null,
+  "student": null,
+  "created_at": "2026-05-12T15:32:00"
 }
 ```
 
@@ -406,6 +441,7 @@ Exemplo de resposta:
   "plate_normalized": "ABC1D23",
   "source": "upload",
   "status": "matched",
+  "operational_decision": "ACESSO_LIBERADO",
   "vehicle": {
     "id": 1,
     "student_id": 1,
@@ -430,6 +466,41 @@ Exemplo de resposta:
   "image_path": "uploads/plate_reads/arquivo.jpg",
   "confidence": 91.42,
   "created_at": "2026-05-12T15:31:00"
+}
+```
+
+Exemplo com OCR abaixo da confianca minima:
+
+```json
+{
+  "id": 3,
+  "plate_input": "ABC1D23",
+  "plate_normalized": "ABC1D23",
+  "source": "upload",
+  "status": "not_found",
+  "operational_decision": "OCR_BAIXA_CONFIANCA",
+  "vehicle": null,
+  "student": null,
+  "image_path": "uploads/plate_reads/arquivo.jpg",
+  "confidence": 69.99,
+  "created_at": "2026-05-12T15:33:00"
+}
+```
+
+Exemplo de erro quando o OCR nao reconhece uma placa:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "plate_not_recognized",
+    "message": "Could not identify a Brazilian plate in the image.",
+    "details": {
+      "operational_decision": "ERRO_OCR"
+    }
+  },
+  "path": "/api/v1/plates/read-image",
+  "timestamp": "2026-05-12T15:34:00+00:00"
 }
 ```
 

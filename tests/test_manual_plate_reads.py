@@ -61,6 +61,7 @@ def test_manual_plate_read_matches_vehicle_and_registers_access_event(
     assert body["plate_normalized"] == "ABC1D23"
     assert body["source"] == "manual"
     assert body["status"] == "matched"
+    assert body["operational_decision"] == "ACESSO_LIBERADO"
     assert body["vehicle"]["id"] == vehicle["id"]
     assert body["student"]["id"] == student["id"]
 
@@ -89,6 +90,7 @@ def test_manual_plate_read_not_found_registers_access_event(
     assert body["plate_input"] == "zzz-9z99"
     assert body["plate_normalized"] == "ZZZ9Z99"
     assert body["status"] == "not_found"
+    assert body["operational_decision"] == "VEICULO_NAO_CADASTRADO"
     assert body["vehicle"] is None
     assert body["student"] is None
 
@@ -107,6 +109,40 @@ def test_manual_plate_read_requires_admin(client: TestClient) -> None:
     assert response.status_code == 401
 
 
+def test_manual_plate_read_with_inactive_vehicle_returns_inactive_decision(
+    client: TestClient,
+) -> None:
+    headers = _admin_headers(client)
+    student = _create_student(client, headers)
+
+    vehicle_response = client.post(
+        "/api/v1/vehicles",
+        json={
+            "student_id": student["id"],
+            "plate": "qwe-1a23",
+            "brand": "Volkswagen",
+            "model": "Gol",
+            "color": "Prata",
+            "is_active": False,
+        },
+        headers=headers,
+    )
+    assert vehicle_response.status_code == 201
+
+    response = client.post(
+        "/api/v1/plates/read-manual",
+        json={"plate": "qwe-1a23"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "matched"
+    assert body["operational_decision"] == "CADASTRO_INATIVO"
+    assert body["vehicle"]["is_active"] is False
+    assert body["student"]["is_active"] is True
+
+
 def test_manual_plate_read_rejects_invalid_plate(client: TestClient) -> None:
     headers = _admin_headers(client)
 
@@ -118,3 +154,4 @@ def test_manual_plate_read_rejects_invalid_plate(client: TestClient) -> None:
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "invalid_plate"
+    assert response.json()["error"]["details"]["operational_decision"] == "PLACA_INVALIDA"

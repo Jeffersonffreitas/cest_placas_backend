@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import AppException
 from app.integrations import ocr
 from app.integrations.ocr import OCRPlateResult, extract_plate_candidate
 from app.models.access_event import AccessEvent
@@ -84,6 +85,7 @@ def test_image_plate_read_with_mock_plate_matches_vehicle_and_registers_records(
     assert body["plate_normalized"] == "ABC1D23"
     assert body["source"] == "upload"
     assert body["status"] == "matched"
+    assert body["operational_decision"] == "ACESSO_LIBERADO"
     assert body["vehicle"]["id"] == vehicle["id"]
     assert body["student"]["id"] == student["id"]
     assert body["image_path"].startswith(upload_dir.as_posix())
@@ -133,6 +135,7 @@ def test_image_plate_read_uses_ocr_when_mock_plate_is_missing_and_registers_not_
     assert body["plate_normalized"] == "ZZZ9Z99"
     assert body["source"] == "upload"
     assert body["status"] == "not_found"
+    assert body["operational_decision"] == "VEICULO_NAO_CADASTRADO"
     assert body["vehicle"] is None
     assert body["student"] is None
     assert body["image_path"].startswith(upload_dir.as_posix())
@@ -195,6 +198,7 @@ def test_image_plate_read_with_sufficient_ocr_confidence_matches_vehicle(
     assert body["plate_input"] == "ZZZ9Z99"
     assert body["plate_normalized"] == "ZZZ9Z99"
     assert body["status"] == "matched"
+    assert body["operational_decision"] == "ACESSO_LIBERADO"
     assert body["vehicle"]["id"] == vehicle["id"]
     assert body["student"]["id"] == student["id"]
     assert body["confidence"] == 70.0
@@ -250,6 +254,7 @@ def test_image_plate_read_with_low_ocr_confidence_registers_safe_not_found(
     assert body["plate_normalized"] == "LOW1A23"
     assert body["source"] == "upload"
     assert body["status"] == "not_found"
+    assert body["operational_decision"] == "OCR_BAIXA_CONFIANCA"
     assert body["vehicle"] is None
     assert body["student"] is None
     assert body["confidence"] == 69.99
@@ -267,6 +272,59 @@ def test_image_plate_read_with_low_ocr_confidence_registers_safe_not_found(
     assert plate_read.vehicle_id is None
     assert plate_read.image_path == body["image_path"]
     assert float(plate_read.confidence) == 69.99
+
+
+def test_image_plate_read_with_ocr_error_returns_operational_decision(
+    client: TestClient,
+    db_session: Session,
+    upload_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = _admin_headers(client)
+
+    def fail_extract_plate_from_image(image_path: str) -> OCRPlateResult:
+        assert image_path.startswith(upload_dir.as_posix())
+        raise AppException(
+            "Could not identify a Brazilian plate in the image.",
+            status_code=422,
+            code="plate_not_recognized",
+        )
+
+    monkeypatch.setattr(plate_service, "extract_plate_from_image", fail_extract_plate_from_image)
+
+    response = client.post(
+        "/api/v1/plates/read-image",
+        files={"file": ("sem-placa.png", b"image-without-plate", "image/png")},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error"]["code"] == "plate_not_recognized"
+    assert body["error"]["details"]["operational_decision"] == "ERRO_OCR"
+    assert db_session.scalars(select(AccessEvent)).all() == []
+    assert db_session.scalars(select(PlateRead)).all() == []
+    assert len(list(upload_dir.iterdir())) == 1
+
+
+def test_image_plate_read_with_invalid_mock_plate_returns_invalid_plate_decision(
+    client: TestClient,
+    upload_dir: Path,
+) -> None:
+    headers = _admin_headers(client)
+
+    response = client.post(
+        "/api/v1/plates/read-image",
+        data={"mock_plate": "ABC"},
+        files={"file": ("mock-invalido.png", b"invalid-mock", "image/png")},
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["error"]["code"] == "invalid_plate"
+    assert body["error"]["details"]["operational_decision"] == "PLACA_INVALIDA"
+    assert len(list(upload_dir.iterdir())) == 1
 
 
 def test_extract_plate_from_good_image_reads_direct_plate(
