@@ -74,6 +74,26 @@ Copy-Item .env.example .env
 - A conexao e feita por `DATABASE_URL`.
 - O driver configurado e `PyMySQL`.
 - As tabelas iniciais foram preparadas com `InnoDB` e `utf8mb4`.
+- As tabelas de dominio usam o padrao de colunas solicitado pela faculdade:
+  `Int` para inteiros/identificadores, `Str` para textos, `Dtd` para datas e
+  `Dec` para decimais.
+- A API preserva os nomes JSON em snake_case, como `student_id`,
+  `registration_number`, `full_name`, `vehicle_id`, `plate`, `source`,
+  `status`, `confidence`, `created_at` e `updated_at`.
+- O mapeamento entre os nomes publicos da API e os nomes fisicos do banco e
+  feito nos models SQLAlchemy.
+
+Exemplos de colunas fisicas:
+
+```text
+students.IntStudentid
+students.StrRegistrationNumber
+vehicles.IntVehicleid
+vehicles.StrPlate
+plate_reads.DecConfidence
+access_events.StrPlateNormalized
+access_events.DtdCreatedAt
+```
 
 Exemplo:
 

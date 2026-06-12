@@ -1,24 +1,45 @@
-from sqlalchemy import Boolean, Index, String
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Index, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base_class import Base, TimestampedModel
+from app.db.base_class import Base
 
 
-class Student(TimestampedModel, Base):
+class Student(Base):
     __tablename__ = "students"
-    __table_args__ = (
-        Index("ix_students_registration_number", "registration_number", unique=True),
-        Index("ix_students_email", "email", unique=True),
-        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
-    )
+    __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    registration_number: Mapped[str] = mapped_column(String(50), nullable=False)
-    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    id: Mapped[int] = mapped_column("IntStudentid", primary_key=True, autoincrement=True)
+    registration_number: Mapped[str] = mapped_column("StrRegistrationNumber", String(50), nullable=False)
+    full_name: Mapped[str] = mapped_column("StrFullName", String(255), nullable=False)
+    email: Mapped[str | None] = mapped_column("StrEmail", String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column("StrPhone", String(20), nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        "IntIsActive",
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="1",
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        "DtdCreatedAt",
+        DateTime(),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        "DtdUpdatedAt",
+        DateTime(),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     vehicles = relationship("Vehicle", back_populates="student")
     access_events = relationship("AccessEvent", back_populates="student")
+
+
+Index("ix_students_registration_number", Student.registration_number, unique=True)
+Index("ix_students_email", Student.email, unique=True)
 
