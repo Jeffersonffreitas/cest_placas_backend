@@ -7,29 +7,29 @@ from app.db.base_class import Base
 
 
 class Student(Base):
-    __tablename__ = "students"
+    __tablename__ = "tblalunos"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("IntStudentid", primary_key=True, autoincrement=True)
-    registration_number: Mapped[str] = mapped_column("StrRegistrationNumber", String(50), nullable=False)
-    full_name: Mapped[str] = mapped_column("StrFullName", String(255), nullable=False)
+    id: Mapped[int] = mapped_column("IntAlunoid", primary_key=True, autoincrement=True)
+    registration_number: Mapped[str] = mapped_column("StrMatricula", String(50), nullable=False)
+    full_name: Mapped[str] = mapped_column("StrNomeCompleto", String(255), nullable=False)
     email: Mapped[str | None] = mapped_column("StrEmail", String(255), nullable=True)
-    phone: Mapped[str | None] = mapped_column("StrPhone", String(20), nullable=True)
+    phone: Mapped[str | None] = mapped_column("StrTelefone", String(20), nullable=True)
     is_active: Mapped[bool] = mapped_column(
-        "IntIsActive",
+        "IntAtivo",
         Boolean,
         nullable=False,
         default=True,
         server_default="1",
     )
     created_at: Mapped[datetime] = mapped_column(
-        "DtdCreatedAt",
+        "DtdCriacao",
         DateTime(),
         nullable=False,
         server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        "DtdUpdatedAt",
+        "DtdAtualizacao",
         DateTime(),
         nullable=False,
         server_default=func.now(),
@@ -40,6 +40,6 @@ class Student(Base):
     access_events = relationship("AccessEvent", back_populates="student")
 
 
-Index("ix_students_registration_number", Student.registration_number, unique=True)
-Index("ix_students_email", Student.email, unique=True)
+Index("ix_tblalunos_matricula", Student.registration_number, unique=True)
+Index("ix_tblalunos_email", Student.email, unique=True)
 

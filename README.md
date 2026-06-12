@@ -74,9 +74,12 @@ Copy-Item .env.example .env
 - A conexao e feita por `DATABASE_URL`.
 - O driver configurado e `PyMySQL`.
 - As tabelas iniciais foram preparadas com `InnoDB` e `utf8mb4`.
-- As tabelas de dominio usam o padrao de colunas solicitado pela faculdade:
-  `Int` para inteiros/identificadores, `Str` para textos, `Dtd` para datas e
-  `Dec` para decimais.
+- As tabelas fisicas usam nomes em portugues com prefixo `tbl`, como
+  `tblalunos`, `tblveiculos`, `tblleiturasplacas`, `tbleventosacesso`,
+  `tblusuarios` e `tbllogsauditoria`.
+- As colunas fisicas usam o padrao solicitado pela faculdade: `Int` para
+  inteiros/identificadores, `Str` para textos, `Dtd` para datas e `Dec` para
+  decimais.
 - A API preserva os nomes JSON em snake_case, como `student_id`,
   `registration_number`, `full_name`, `vehicle_id`, `plate`, `source`,
   `status`, `confidence`, `created_at` e `updated_at`.
@@ -86,13 +89,15 @@ Copy-Item .env.example .env
 Exemplos de colunas fisicas:
 
 ```text
-students.IntStudentid
-students.StrRegistrationNumber
-vehicles.IntVehicleid
-vehicles.StrPlate
-plate_reads.DecConfidence
-access_events.StrPlateNormalized
-access_events.DtdCreatedAt
+tblalunos.IntAlunoid
+tblalunos.StrMatricula
+tblveiculos.IntVeiculoid
+tblveiculos.StrPlaca
+tblleiturasplacas.DecConfianca
+tbleventosacesso.StrPlacaNormalizada
+tbleventosacesso.DtdCriacao
+tblusuarios.StrUsuario
+tbllogsauditoria.StrAcao
 ```
 
 Exemplo:
@@ -435,15 +440,15 @@ com confianca alta.
 
 Para o OCR real, a API exige confianca minima de `70.0` em uma escala de 0 a
 100. Leituras com confianca ausente ou abaixo desse valor continuam sendo
-registradas em `plate_reads` e geram evento em `access_events`, mas sao
+registradas em `tblleiturasplacas` e geram evento em `tbleventosacesso`, mas sao
 tratadas de forma segura como `status` igual a `not_found`, sem vincular
 veiculo ou aluno. Quando `mock_plate` for enviado, essa regra de confianca nao
 e aplicada, preservando o fluxo de testes e simulacoes.
 
 A leitura salva a imagem em `uploads/plate_reads/`, registra uma linha em
-`plate_reads` com `image_path`, `source` igual a `upload` e `confidence` quando
-o OCR fornecer essa informacao. Depois registra normalmente um evento de acesso
-com `source` igual a `upload`.
+`tblleiturasplacas` com JSON publico `image_path`, `source` igual a `upload` e
+`confidence` quando o OCR fornecer essa informacao. Depois registra normalmente
+um evento de acesso com `source` igual a `upload`.
 
 Sem `mock_plate`, o ambiente precisa ter o Tesseract OCR instalado, alem das
 dependencias Python instaladas por `requirements.txt`. No Windows, a integracao
