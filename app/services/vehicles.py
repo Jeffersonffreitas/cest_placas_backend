@@ -6,7 +6,7 @@ from app.models.vehicle import Vehicle
 from app.repositories import vehicles as vehicle_repository
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate
 from app.services.plates import normalize_and_validate_plate
-from app.services.students import get_student_or_404
+from app.services.students import get_active_student_or_404
 
 
 def list_vehicles(
@@ -48,7 +48,7 @@ def _ensure_unique_plate(
     *,
     current_vehicle_id: int | None = None,
 ) -> None:
-    vehicle = vehicle_repository.get_vehicle_by_plate(db, plate)
+    vehicle = vehicle_repository.get_active_vehicle_by_plate(db, plate)
     if vehicle is not None and vehicle.id != current_vehicle_id:
         raise AppException(
             "Vehicle plate already exists.",
@@ -59,7 +59,7 @@ def _ensure_unique_plate(
 
 def create_vehicle(db: Session, payload: VehicleCreate) -> Vehicle:
     data = payload.model_dump()
-    get_student_or_404(db, int(data["student_id"]))
+    get_active_student_or_404(db, int(data["student_id"]))
     data["plate"] = normalize_and_validate_plate(str(data["plate"]))
     _ensure_unique_plate(db, str(data["plate"]))
 
@@ -71,7 +71,7 @@ def create_vehicle(db: Session, payload: VehicleCreate) -> Vehicle:
         raise AppException(
             "Vehicle unique data already exists.",
             status_code=409,
-            code="vehicle_conflict",
+            code="vehicle_plate_conflict",
         ) from None
     db.refresh(vehicle)
     return vehicle
@@ -82,7 +82,7 @@ def update_vehicle(db: Session, vehicle_id: int, payload: VehicleUpdate) -> Vehi
     data = payload.model_dump(exclude_unset=True)
 
     if "student_id" in data:
-        get_student_or_404(db, int(data["student_id"]))
+        get_active_student_or_404(db, int(data["student_id"]))
 
     if "plate" in data:
         data["plate"] = normalize_and_validate_plate(str(data["plate"]))
@@ -96,7 +96,7 @@ def update_vehicle(db: Session, vehicle_id: int, payload: VehicleUpdate) -> Vehi
         raise AppException(
             "Vehicle unique data already exists.",
             status_code=409,
-            code="vehicle_conflict",
+            code="vehicle_plate_conflict",
         ) from None
     db.refresh(vehicle)
     return vehicle
@@ -104,5 +104,5 @@ def update_vehicle(db: Session, vehicle_id: int, payload: VehicleUpdate) -> Vehi
 
 def delete_vehicle(db: Session, vehicle_id: int) -> None:
     vehicle = get_vehicle_or_404(db, vehicle_id)
-    vehicle_repository.delete_vehicle(db, vehicle)
+    vehicle_repository.deactivate_vehicle(vehicle)
     db.commit()

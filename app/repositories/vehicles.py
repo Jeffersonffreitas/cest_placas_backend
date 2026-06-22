@@ -27,6 +27,14 @@ def get_vehicle_by_plate(db: Session, plate: str) -> Vehicle | None:
     return db.scalars(statement).first()
 
 
+def get_active_vehicle_by_plate(db: Session, plate: str) -> Vehicle | None:
+    statement = select(Vehicle).where(
+        Vehicle.plate == plate,
+        Vehicle.is_active.is_(True),
+    )
+    return db.scalars(statement).first()
+
+
 def create_vehicle(db: Session, data: dict[str, object]) -> Vehicle:
     vehicle = Vehicle(**data)
     db.add(vehicle)
@@ -41,3 +49,8 @@ def update_vehicle(vehicle: Vehicle, data: dict[str, object]) -> Vehicle:
 
 def delete_vehicle(db: Session, vehicle: Vehicle) -> None:
     db.delete(vehicle)
+
+
+def deactivate_vehicle(vehicle: Vehicle) -> Vehicle:
+    vehicle.is_active = False
+    return vehicle

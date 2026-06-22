@@ -22,13 +22,41 @@ def get_student_or_404(db: Session, student_id: int) -> Student:
     return student
 
 
+def get_active_student_or_404(db: Session, student_id: int) -> Student:
+    student = get_student_or_404(db, student_id)
+    if not student.is_active:
+        raise AppException(
+            "Student is inactive.",
+            status_code=409,
+            code="student_inactive",
+        )
+    return student
+
+
+def get_student_by_registration_number_or_404(
+    db: Session,
+    registration_number: str,
+) -> Student:
+    student = student_repository.get_student_by_registration_number(
+        db,
+        registration_number,
+    )
+    if student is None:
+        raise AppException(
+            "Student was not found.",
+            status_code=404,
+            code="student_not_found",
+        )
+    return student
+
+
 def _ensure_unique_registration_number(
     db: Session,
     registration_number: str,
     *,
     current_student_id: int | None = None,
 ) -> None:
-    student = student_repository.get_student_by_registration_number(db, registration_number)
+    student = student_repository.get_active_student_by_registration_number(db, registration_number)
     if student is not None and student.id != current_student_id:
         raise AppException(
             "Registration number already exists.",
@@ -110,12 +138,5 @@ def update_student(db: Session, student_id: int, payload: StudentUpdate) -> Stud
 
 def delete_student(db: Session, student_id: int) -> None:
     student = get_student_or_404(db, student_id)
-    if student_repository.count_student_vehicles(db, student_id) > 0:
-        raise AppException(
-            "Student has linked vehicles and cannot be deleted.",
-            status_code=409,
-            code="student_has_vehicles",
-        )
-
-    student_repository.delete_student(db, student)
+    student_repository.deactivate_student(student)
     db.commit()

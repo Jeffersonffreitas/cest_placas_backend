@@ -22,6 +22,17 @@ def get_student_by_registration_number(
     return db.scalars(statement).first()
 
 
+def get_active_student_by_registration_number(
+    db: Session,
+    registration_number: str,
+) -> Student | None:
+    statement = select(Student).where(
+        Student.registration_number == registration_number,
+        Student.is_active.is_(True),
+    )
+    return db.scalars(statement).first()
+
+
 def get_student_by_email(db: Session, email: str) -> Student | None:
     statement = select(Student).where(Student.email == email)
     return db.scalars(statement).first()
@@ -41,6 +52,11 @@ def update_student(student: Student, data: dict[str, object]) -> Student:
 
 def delete_student(db: Session, student: Student) -> None:
     db.delete(student)
+
+
+def deactivate_student(student: Student) -> Student:
+    student.is_active = False
+    return student
 
 
 def count_student_vehicles(db: Session, student_id: int) -> int:

@@ -12,9 +12,10 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - rota `/health`
 - autenticacao administrativa basica com JWT
 - rotas `/api/v1/auth/login` e `/api/v1/auth/me`
-- CRUD administrativo de alunos em `/api/v1/students`
-- CRUD administrativo de veiculos em `/api/v1/vehicles`
+- CRUD administrativo local de alunos em `/api/v1/students`
+- CRUD administrativo local de veiculos em `/api/v1/vehicles`
 - vinculo de 1 aluno para varios veiculos
+- busca de aluno por matricula em `/api/v1/students/by-registration/{registration_number}`
 - busca de veiculo por placa em `/api/v1/vehicles/by-plate/{plate}`
 - leitura manual de placa em `/api/v1/plates/read-manual`
 - upload de imagem com OCR para leitura de placa em `/api/v1/plates/read-image`
@@ -204,7 +205,7 @@ GET /api/v1/auth/me
 
 ## Alunos
 
-Todas as rotas de alunos exigem o header:
+CRUD administrativo local de alunos. Todas as rotas de alunos exigem o header:
 
 ```text
 Authorization: Bearer jwt_token
@@ -219,10 +220,10 @@ curl -X POST "http://localhost:8000/api/v1/students" `
   -d '{"registration_number":"20260001","full_name":"Maria Silva","email":"maria.silva@example.com","phone":"85999990000"}'
 ```
 
-Listar alunos:
+Listar alunos com paginacao:
 
 ```powershell
-curl "http://localhost:8000/api/v1/students" `
+curl "http://localhost:8000/api/v1/students?skip=0&limit=20" `
   -H "Authorization: Bearer jwt_token"
 ```
 
@@ -230,6 +231,13 @@ Consultar aluno por id:
 
 ```powershell
 curl "http://localhost:8000/api/v1/students/1" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+Consultar aluno por matricula:
+
+```powershell
+curl "http://localhost:8000/api/v1/students/by-registration/20260001" `
   -H "Authorization: Bearer jwt_token"
 ```
 
@@ -242,28 +250,29 @@ curl -X PUT "http://localhost:8000/api/v1/students/1" `
   -d '{"phone":"85888880000","is_active":true}'
 ```
 
-Excluir aluno:
+Desativar aluno sem apagar do banco:
 
 ```powershell
 curl -X DELETE "http://localhost:8000/api/v1/students/1" `
   -H "Authorization: Bearer jwt_token"
 ```
 
-Alunos com veiculos vinculados nao podem ser excluidos antes da remocao dos
-veiculos.
+A desativacao marca `is_active=false` e mantem o registro em `tblalunos`.
+Matriculas ativas duplicadas sao rejeitadas.
 
 ## Veiculos
 
-Todas as rotas de veiculos exigem o header:
+CRUD administrativo local de veiculos. Todas as rotas de veiculos exigem o header:
 
 ```text
 Authorization: Bearer jwt_token
 ```
 
 A placa e normalizada antes de salvar e consultar. Exemplos como `abc-1234`,
-`ABC1234` e `abc 1234` sao tratados como `ABC1234`.
+`ABC1234` e `abc 1234` sao tratados como `ABC1234`. Placas invalidas retornam
+erro `invalid_plate` antes do cadastro.
 
-Criar veiculo vinculado a um aluno:
+Criar veiculo vinculado a um aluno existente e ativo:
 
 ```powershell
 curl -X POST "http://localhost:8000/api/v1/vehicles" `
@@ -272,10 +281,10 @@ curl -X POST "http://localhost:8000/api/v1/vehicles" `
   -d '{"student_id":1,"plate":"abc-1234","brand":"Fiat","model":"Mobi","color":"Branco"}'
 ```
 
-Listar veiculos:
+Listar veiculos com paginacao:
 
 ```powershell
-curl "http://localhost:8000/api/v1/vehicles" `
+curl "http://localhost:8000/api/v1/vehicles?skip=0&limit=20" `
   -H "Authorization: Bearer jwt_token"
 ```
 
@@ -309,12 +318,15 @@ curl -X PUT "http://localhost:8000/api/v1/vehicles/1" `
   -d '{"color":"Preto","is_active":true}'
 ```
 
-Excluir veiculo:
+Desativar veiculo sem apagar do banco:
 
 ```powershell
 curl -X DELETE "http://localhost:8000/api/v1/vehicles/1" `
   -H "Authorization: Bearer jwt_token"
 ```
+
+A desativacao marca `is_active=false` e mantem o registro em `tblveiculos`.
+Placas ativas duplicadas sao rejeitadas.
 
 ## Leitura manual de placa
 

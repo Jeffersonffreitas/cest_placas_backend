@@ -99,7 +99,7 @@ def update_vehicle(
 @router.delete(
     "/{vehicle_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete vehicle",
+    summary="Deactivate vehicle",
 )
 def delete_vehicle(
     vehicle_id: int,

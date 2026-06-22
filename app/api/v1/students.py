@@ -45,6 +45,26 @@ def list_students(
 
 
 @router.get(
+    "/by-registration/{registration_number}",
+    response_model=StudentRead,
+    status_code=status.HTTP_200_OK,
+    summary="Get student by registration number",
+)
+def get_student_by_registration_number(
+    registration_number: str,
+    admin_user: CurrentAdminUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> StudentRead:
+    del admin_user
+    return StudentRead.model_validate(
+        student_service.get_student_by_registration_number_or_404(
+            db,
+            registration_number,
+        ),
+    )
+
+
+@router.get(
     "/{student_id}",
     response_model=StudentRead,
     status_code=status.HTTP_200_OK,
@@ -78,7 +98,7 @@ def update_student(
 @router.delete(
     "/{student_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete student",
+    summary="Deactivate student",
 )
 def delete_student(
     student_id: int,
