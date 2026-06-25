@@ -6,11 +6,40 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentAdminUser
 from app.db.deps import get_db
-from app.schemas.access_event import AccessEventRead, AccessEventSource, AccessEventStatus
+from app.schemas.access_event import (
+    AccessEventRead,
+    AccessEventSource,
+    AccessEventStatus,
+    AccessEventSummaryRead,
+)
 from app.services import access_events as access_event_service
 
 
 router = APIRouter(tags=["access-events"])
+
+
+@router.get(
+    "/summary",
+    response_model=AccessEventSummaryRead,
+    status_code=status.HTTP_200_OK,
+    summary="Summarize access events",
+)
+def summarize_access_events(
+    admin_user: CurrentAdminUser,
+    db: Annotated[Session, Depends(get_db)],
+    source: AccessEventSource | None = None,
+    access_status: Annotated[AccessEventStatus | None, Query(alias="status")] = None,
+    date_from: Annotated[datetime | None, Query()] = None,
+    date_to: Annotated[datetime | None, Query()] = None,
+) -> AccessEventSummaryRead:
+    del admin_user
+    return access_event_service.summarize_access_events(
+        db,
+        source=source,
+        status=access_status,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
 
 @router.get(

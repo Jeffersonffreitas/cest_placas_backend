@@ -20,6 +20,7 @@ from app.schemas.plate import ManualPlateReadRequest, OperationalDecision
 
 
 _PLATE_CLEANER = re.compile(r"[^A-Za-z0-9]")
+_BR_PLATE_PATTERN = re.compile(r"^[A-Z]{3}(?:[0-9]{4}|[0-9][A-Z][0-9]{2})$")
 PLATE_READ_UPLOAD_DIR = Path("uploads/plate_reads")
 MIN_OCR_CONFIDENCE = 70.0
 OPERATIONAL_DECISION_INVALID_PLATE: OperationalDecision = "PLACA_INVALIDA"
@@ -41,9 +42,9 @@ def normalize_plate(plate: str) -> str:
 
 def normalize_and_validate_plate(plate: str) -> str:
     normalized_plate = normalize_plate(plate)
-    if len(normalized_plate) != 7 or not normalized_plate.isalnum():
+    if _BR_PLATE_PATTERN.fullmatch(normalized_plate) is None:
         raise AppException(
-            "Plate must have 7 alphanumeric characters.",
+            "Plate must match a valid Brazilian plate pattern.",
             status_code=400,
             code="invalid_plate",
             details={"operational_decision": OPERATIONAL_DECISION_INVALID_PLATE},

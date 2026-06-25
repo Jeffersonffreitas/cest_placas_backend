@@ -306,3 +306,125 @@ def test_access_events_list_rejects_invalid_plate_filter(client: TestClient) -> 
 
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "invalid_plate"
+
+
+def test_access_events_list_without_filter_returns_event_details(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    headers = _admin_headers(client)
+    student = _create_student(client, headers, "20260021", "Carla Souza")
+    vehicle = _create_vehicle(client, headers, int(student["id"]), "ghi-3j45")
+    expected = _add_access_event(
+        db_session,
+        plate_input="ghi-3j45",
+        plate_normalized="GHI3J45",
+        source="manual",
+        status="matched",
+        student_id=int(student["id"]),
+        vehicle_id=int(vehicle["id"]),
+        created_at=datetime(2026, 5, 13, 8, 0, 0),
+    )
+
+    response = client.get("/api/v1/access-events", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["id"] == expected.id
+    assert body[0]["plate_input"] == "ghi-3j45"
+    assert body[0]["plate_normalized"] == "GHI3J45"
+    assert body[0]["source"] == "manual"
+    assert body[0]["status"] == "matched"
+    assert body[0]["created_at"] == "2026-05-13T08:00:00"
+    assert body[0]["vehicle"]["id"] == vehicle["id"]
+    assert body[0]["student"]["id"] == student["id"]
+
+
+def test_access_events_list_rejects_invalid_source(client: TestClient) -> None:
+    headers = _admin_headers(client)
+
+    response = client.get("/api/v1/access-events?source=camera", headers=headers)
+
+    assert response.status_code == 422
+
+
+def test_access_events_summary_requires_admin(client: TestClient) -> None:
+    response = client.get("/api/v1/access-events/summary")
+
+    assert response.status_code == 401
+
+
+def test_access_events_summary_returns_filtered_totals(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    headers = _admin_headers(client)
+    _add_access_event(
+        db_session,
+        plate_input="AAA1A11",
+        plate_normalized="AAA1A11",
+        source="manual",
+        status="matched",
+        created_at=datetime(2026, 5, 12, 8, 0, 0),
+    )
+    _add_access_event(
+        db_session,
+        plate_input="BBB2B22",
+        plate_normalized="BBB2B22",
+        source="upload",
+        status="not_found",
+        created_at=datetime(2026, 5, 12, 9, 0, 0),
+    )
+    _add_access_event(
+        db_session,
+        plate_input="CCC3C33",
+        plate_normalized="CCC3C33",
+        source="upload",
+        status="matched",
+        created_at=datetime(2026, 5, 12, 10, 0, 0),
+    )
+    _add_access_event(
+        db_session,
+        plate_input="DDD4D44",
+        plate_normalized="DDD4D44",
+        source="manual",
+        status="not_found",
+        created_at=datetime(2026, 5, 12, 11, 0, 0),
+    )
+
+    response = client.get(
+        "/api/v1/access-events/summary"
+        "?source=upload"
+        "&date_from=2026-05-12T08:30:00"
+        "&date_to=2026-05-12T10:30:00",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {
+        "total_events": 2,
+        "total_matched": 1,
+        "total_not_found": 1,
+        "total_manual": 0,
+        "total_upload": 2,
+        "total_by_status": {"matched": 1, "not_found": 1},
+        "total_by_source": {"manual": 0, "upload": 2},
+        "period": {
+            "date_from": "2026-05-12T08:30:00",
+            "date_to": "2026-05-12T10:30:00",
+        },
+    }
+
+    status_response = client.get(
+        "/api/v1/access-events/summary?status=matched",
+        headers=headers,
+    )
+
+    assert status_response.status_code == 200
+    status_body = status_response.json()
+    assert status_body["total_events"] == 2
+    assert status_body["total_by_status"] == {"matched": 2, "not_found": 0}
+    assert status_body["total_by_source"] == {"manual": 1, "upload": 1}
+    assert status_body["period"] is None

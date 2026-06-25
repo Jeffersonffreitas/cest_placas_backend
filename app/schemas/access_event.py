@@ -19,3 +19,19 @@ class AccessEventRead(ORMBaseSchema):
     vehicle: VehicleRead | None
     student: StudentRead | None
     created_at: datetime
+
+
+class AccessEventSummaryPeriod(ORMBaseSchema):
+    date_from: datetime | None = None
+    date_to: datetime | None = None
+
+
+class AccessEventSummaryRead(ORMBaseSchema):
+    total_events: int
+    total_matched: int
+    total_not_found: int
+    total_manual: int
+    total_upload: int
+    total_by_status: dict[str, int]
+    total_by_source: dict[str, int]
+    period: AccessEventSummaryPeriod | None = None

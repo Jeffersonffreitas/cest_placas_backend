@@ -543,7 +543,7 @@ Exemplo de erro quando o OCR nao reconhece uma placa:
 
 ## Eventos de acesso
 
-A rota de eventos de acesso exige autenticacao administrativa:
+As rotas de eventos de acesso exigem autenticacao administrativa:
 
 ```text
 Authorization: Bearer jwt_token
@@ -556,13 +556,10 @@ curl "http://localhost:8000/api/v1/access-events" `
   -H "Authorization: Bearer jwt_token"
 ```
 
-Filtros e paginacao disponiveis no Swagger em:
+A listagem retorna a placa informada, a placa normalizada, origem, status,
+data de criacao e, quando existirem, os dados do veiculo e do aluno vinculados.
 
-```text
-http://localhost:8000/docs
-```
-
-Parametros aceitos:
+Parametros aceitos na listagem:
 
 ```text
 skip=0
@@ -576,6 +573,17 @@ date_from=2026-05-12T00:00:00
 date_to=2026-05-12T23:59:59
 ```
 
+Validacoes:
+
+```text
+limit minimo: 1
+limit maximo: 100
+plate: placa brasileira valida, normalizada antes da busca
+source: manual ou upload
+status: matched ou not_found
+date_from: deve ser menor ou igual a date_to quando ambos forem enviados
+```
+
 Exemplo combinando filtros:
 
 ```powershell
@@ -584,9 +592,49 @@ curl "http://localhost:8000/api/v1/access-events?plate=abc-1d23&status=matched&s
 ```
 
 O filtro `plate` e normalizado antes da busca. Assim, `abc-1d23`,
-`ABC1D23` e `abc 1d23` consultam a placa `ABC1D23`. O filtro `status`
-aceita apenas `matched` e `not_found`. O filtro `source` aceita `manual`
-e `upload`.
+`ABC1D23` e `abc 1d23` consultam a placa `ABC1D23`.
+
+Consultar resumo operacional:
+
+```powershell
+curl "http://localhost:8000/api/v1/access-events/summary?date_from=2026-05-12T00:00:00&date_to=2026-05-12T23:59:59" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+Filtros aceitos no resumo:
+
+```text
+source=manual
+status=matched
+date_from=2026-05-12T00:00:00
+date_to=2026-05-12T23:59:59
+```
+
+Exemplo de resposta do resumo:
+
+```json
+{
+  "total_events": 10,
+  "total_matched": 7,
+  "total_not_found": 3,
+  "total_manual": 4,
+  "total_upload": 6,
+  "total_by_status": {
+    "matched": 7,
+    "not_found": 3
+  },
+  "total_by_source": {
+    "manual": 4,
+    "upload": 6
+  },
+  "period": {
+    "date_from": "2026-05-12T00:00:00",
+    "date_to": "2026-05-12T23:59:59"
+  }
+}
+```
+
+Quando `date_from` e `date_to` nao forem enviados, `period` retorna `null`.
 
 ## Rodar testes
 
