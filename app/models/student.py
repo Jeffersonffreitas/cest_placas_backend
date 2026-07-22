@@ -10,26 +10,26 @@ class Student(Base):
     __tablename__ = "tblalunos"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("IntAlunoid", primary_key=True, autoincrement=True)
-    registration_number: Mapped[str] = mapped_column("StrMatricula", String(50), nullable=False)
-    full_name: Mapped[str] = mapped_column("StrNomeCompleto", String(255), nullable=False)
-    email: Mapped[str | None] = mapped_column("StrEmail", String(255), nullable=True)
-    phone: Mapped[str | None] = mapped_column("StrTelefone", String(20), nullable=True)
+    id: Mapped[int] = mapped_column("numalunoid", primary_key=True, autoincrement=True)
+    registration_number: Mapped[str] = mapped_column("strmatricula", String(50), nullable=False)
+    full_name: Mapped[str] = mapped_column("strnomecompleto", String(255), nullable=False)
+    email: Mapped[str | None] = mapped_column("stremail", String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column("strtelefone", String(20), nullable=True)
     is_active: Mapped[bool] = mapped_column(
-        "IntAtivo",
+        "bolativo",
         Boolean,
         nullable=False,
         default=True,
         server_default="1",
     )
     created_at: Mapped[datetime] = mapped_column(
-        "DtdCriacao",
+        "dtacriacao",
         DateTime(),
         nullable=False,
         server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        "DtdAtualizacao",
+        "dtaatualizacao",
         DateTime(),
         nullable=False,
         server_default=func.now(),

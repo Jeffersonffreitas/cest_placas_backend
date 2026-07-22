@@ -78,9 +78,9 @@ Copy-Item .env.example .env
 - As tabelas fisicas usam nomes em portugues com prefixo `tbl`, como
   `tblalunos`, `tblveiculos`, `tblleiturasplacas`, `tbleventosacesso`,
   `tblusuarios` e `tbllogsauditoria`.
-- As colunas fisicas usam o padrao solicitado pela faculdade: `Int` para
-  inteiros/identificadores, `Str` para textos, `Dtd` para datas e `Dec` para
-  decimais.
+- As colunas fisicas usam nomes em minusculo e o padrao solicitado pela
+  faculdade: `num` para numeros/identificadores, `str` para textos, `dta` para
+  datas, `dec` para decimais e `bol` para campos booleanos.
 - A API preserva os nomes JSON em snake_case, como `student_id`,
   `registration_number`, `full_name`, `vehicle_id`, `plate`, `source`,
   `status`, `confidence`, `created_at` e `updated_at`.
@@ -90,15 +90,15 @@ Copy-Item .env.example .env
 Exemplos de colunas fisicas:
 
 ```text
-tblalunos.IntAlunoid
-tblalunos.StrMatricula
-tblveiculos.IntVeiculoid
-tblveiculos.StrPlaca
-tblleiturasplacas.DecConfianca
-tbleventosacesso.StrPlacaNormalizada
-tbleventosacesso.DtdCriacao
-tblusuarios.StrUsuario
-tbllogsauditoria.StrAcao
+tblalunos.numalunoid
+tblalunos.strmatricula
+tblveiculos.numveiculoid
+tblveiculos.strplaca
+tblleiturasplacas.decconfianca
+tbleventosacesso.strplacanormalizada
+tbleventosacesso.dtacriacao
+tblusuarios.strusuario
+tbllogsauditoria.stracao
 ```
 
 Exemplo:

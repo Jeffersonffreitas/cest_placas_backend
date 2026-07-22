@@ -10,18 +10,18 @@ class AuditLog(Base):
     __tablename__ = "tbllogsauditoria"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("IntLogAuditoriaid", primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column("numlogauditoriaid", primary_key=True, autoincrement=True)
     user_id: Mapped[int | None] = mapped_column(
-        "IntUsuarioid",
-        ForeignKey("tblusuarios.IntUsuarioid", name="fk_tbllogsauditoria_usuario", ondelete="SET NULL"),
+        "numusuarioid",
+        ForeignKey("tblusuarios.numusuarioid", name="fk_tbllogsauditoria_usuario", ondelete="SET NULL"),
         nullable=True,
     )
-    action: Mapped[str] = mapped_column("StrAcao", String(100), nullable=False)
-    entity_name: Mapped[str] = mapped_column("StrEntidade", String(100), nullable=False)
-    entity_id: Mapped[str | None] = mapped_column("IntEntidadeid", String(50), nullable=True)
-    details: Mapped[dict | None] = mapped_column("StrDetalhes", JSON, nullable=True)
+    action: Mapped[str] = mapped_column("stracao", String(100), nullable=False)
+    entity_name: Mapped[str] = mapped_column("strentidade", String(100), nullable=False)
+    entity_id: Mapped[str | None] = mapped_column("numentidadeid", String(50), nullable=True)
+    details: Mapped[dict | None] = mapped_column("strdetalhes", JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        "DtdCriacao",
+        "dtacriacao",
         DateTime(),
         nullable=False,
         server_default=func.now(),

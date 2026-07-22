@@ -10,29 +10,29 @@ class AccessEvent(Base):
     __tablename__ = "tbleventosacesso"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("IntEventoAcessoid", primary_key=True, autoincrement=True)
-    plate_input: Mapped[str] = mapped_column("StrPlacaEntrada", String(20), nullable=False)
-    plate_normalized: Mapped[str] = mapped_column("StrPlacaNormalizada", String(10), nullable=False)
+    id: Mapped[int] = mapped_column("numeventoacessoid", primary_key=True, autoincrement=True)
+    plate_input: Mapped[str] = mapped_column("strplacaentrada", String(20), nullable=False)
+    plate_normalized: Mapped[str] = mapped_column("strplacanormalizada", String(10), nullable=False)
     student_id: Mapped[int | None] = mapped_column(
-        "IntAlunoid",
-        ForeignKey("tblalunos.IntAlunoid", name="fk_tbleventosacesso_aluno", ondelete="SET NULL"),
+        "numalunoid",
+        ForeignKey("tblalunos.numalunoid", name="fk_tbleventosacesso_aluno", ondelete="SET NULL"),
         nullable=True,
     )
     vehicle_id: Mapped[int | None] = mapped_column(
-        "IntVeiculoid",
-        ForeignKey("tblveiculos.IntVeiculoid", name="fk_tbleventosacesso_veiculo", ondelete="SET NULL"),
+        "numveiculoid",
+        ForeignKey("tblveiculos.numveiculoid", name="fk_tbleventosacesso_veiculo", ondelete="SET NULL"),
         nullable=True,
     )
     source: Mapped[str] = mapped_column(
-        "StrOrigem",
+        "strorigem",
         String(30),
         nullable=False,
         default="manual",
         server_default="manual",
     )
-    status: Mapped[str] = mapped_column("StrSituacao", String(20), nullable=False)
+    status: Mapped[str] = mapped_column("strsituacao", String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        "DtdCriacao",
+        "dtacriacao",
         DateTime(),
         nullable=False,
         server_default=func.now(),
