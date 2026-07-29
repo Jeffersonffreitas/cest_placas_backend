@@ -649,3 +649,24 @@ python -m pytest
   simulacoes.
 - Nao ha integracao com banco do CEST nesta etapa.
 - A autenticacao administrativa usa JWT e senha com hash.
+
+## Dominios selecionaveis
+
+A tabela `tbldominios` centraliza opcoes selecionaveis e prepara o backend para
+referencias futuras em veiculos, eventos e pessoas, sem alterar os vinculos
+atuais. A API continua expondo JSON em snake_case (`type`, `code`, `name`,
+`parent_id` e `is_active`), enquanto o banco usa os nomes fisicos padronizados.
+
+Tipos iniciais de dominio:
+
+- `MARCA_VEICULO`
+- `MODELO_VEICULO`
+- `COR_VEICULO`
+- `ORIGEM_ACESSO`
+- `ACAO_ACESSO`
+- `CURSO`
+- `COORDENACAO`
+
+As rotas administrativas protegidas estao em `/api/v1/domains`. A listagem
+aceita os filtros `tipo`, `ativo`, `parent_id`, `skip` e `limit` (de 1 a 100).
+O `DELETE` e logico: define `is_active=false` e preserva o registro.
