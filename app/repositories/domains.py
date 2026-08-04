@@ -23,6 +23,11 @@ def get_domain(db: Session, domain_id: int) -> Domain | None:
     return db.get(Domain, domain_id)
 
 
+def get_by_type_and_name(db: Session, *, type: str, name: str) -> Domain | None:
+    statement = select(Domain).where(Domain.type == type, Domain.name == name).order_by(Domain.id)
+    return db.scalars(statement).first()
+
+
 def get_active_duplicate(
     db: Session, *, type: str, code: str | None, name: str,
 ) -> Domain | None:

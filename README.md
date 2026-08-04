@@ -281,6 +281,26 @@ curl -X POST "http://localhost:8000/api/v1/vehicles" `
   -d '{"student_id":1,"plate":"abc-1234","brand":"Fiat","model":"Mobi","color":"Branco"}'
 ```
 
+Marca, modelo e cor agora usam referencias estruturadas em `tbldominios`, com
+os tipos `MARCA_VEICULO`, `MODELO_VEICULO` e `COR_VEICULO`. A API aceita tanto
+`brand_id`, `model_id` e `color_id` quanto os campos textuais antigos `brand`,
+`model` e `color`. Ao receber texto, localiza ou cria o dominio correspondente.
+
+No banco, `nummarcaid`, `nummodeloid` e `numcorid` sao os novos campos
+estruturados de `tblveiculos`. As colunas `strmarca`, `strmodelo` e `strcor`
+foram mantidas temporariamente e continuam sendo preenchidas para
+compatibilidade. As respostas incluem os IDs e tambem `brand_name`,
+`model_name` e `color_name`.
+
+Exemplo usando IDs de dominios existentes e ativos:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/vehicles" `
+  -H "Authorization: Bearer jwt_token" `
+  -H "Content-Type: application/json" `
+  -d '{"student_id":1,"plate":"BRA2E19","brand_id":10,"model_id":11,"color_id":12}'
+```
+
 Listar veiculos com paginacao:
 
 ```powershell
@@ -652,9 +672,9 @@ python -m pytest
 
 ## Dominios selecionaveis
 
-A tabela `tbldominios` centraliza opcoes selecionaveis e prepara o backend para
-referencias futuras em veiculos, eventos e pessoas, sem alterar os vinculos
-atuais. A API continua expondo JSON em snake_case (`type`, `code`, `name`,
+A tabela `tbldominios` centraliza opcoes selecionaveis e fornece as referencias
+de marca, modelo e cor dos veiculos, sem alterar os demais vinculos atuais. A
+API continua expondo JSON em snake_case (`type`, `code`, `name`,
 `parent_id` e `is_active`), enquanto o banco usa os nomes fisicos padronizados.
 
 Tipos iniciais de dominio:

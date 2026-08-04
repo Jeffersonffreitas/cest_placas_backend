@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.vehicle import Vehicle
 
@@ -11,7 +11,11 @@ def list_vehicles(
     limit: int = 100,
     student_id: int | None = None,
 ) -> list[Vehicle]:
-    statement = select(Vehicle)
+    statement = select(Vehicle).options(
+        selectinload(Vehicle.brand_domain),
+        selectinload(Vehicle.model_domain),
+        selectinload(Vehicle.color_domain),
+    )
     if student_id is not None:
         statement = statement.where(Vehicle.student_id == student_id)
     statement = statement.order_by(Vehicle.id).offset(skip).limit(limit)
@@ -19,11 +23,20 @@ def list_vehicles(
 
 
 def get_vehicle(db: Session, vehicle_id: int) -> Vehicle | None:
-    return db.get(Vehicle, vehicle_id)
+    statement = select(Vehicle).where(Vehicle.id == vehicle_id).options(
+        selectinload(Vehicle.brand_domain),
+        selectinload(Vehicle.model_domain),
+        selectinload(Vehicle.color_domain),
+    )
+    return db.scalars(statement).first()
 
 
 def get_vehicle_by_plate(db: Session, plate: str) -> Vehicle | None:
-    statement = select(Vehicle).where(Vehicle.plate == plate)
+    statement = select(Vehicle).where(Vehicle.plate == plate).options(
+        selectinload(Vehicle.brand_domain),
+        selectinload(Vehicle.model_domain),
+        selectinload(Vehicle.color_domain),
+    )
     return db.scalars(statement).first()
 
 

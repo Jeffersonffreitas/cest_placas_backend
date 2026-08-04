@@ -3,10 +3,62 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
 from app.models.vehicle import Vehicle
+from app.models.domain import Domain
 from app.repositories import vehicles as vehicle_repository
+from app.repositories import domains as domain_repository
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate
 from app.services.plates import normalize_and_validate_plate
 from app.services.students import get_active_student_or_404
+
+
+VEHICLE_DOMAIN_FIELDS = {
+    "brand": ("brand_id", "MARCA_VEICULO"),
+    "model": ("model_id", "MODELO_VEICULO"),
+    "color": ("color_id", "COR_VEICULO"),
+}
+
+
+def _active_domain(db: Session, domain_id: int, expected_type: str, field: str) -> Domain:
+    domain = domain_repository.get_domain(db, domain_id)
+    if domain is None or not domain.is_active or domain.type != expected_type:
+        raise AppException(
+            f"{field} must reference an active {expected_type} domain.",
+            status_code=422,
+            code=f"invalid_{field}",
+        )
+    return domain
+
+
+def _domain_for_text(db: Session, value: str, expected_type: str) -> Domain | None:
+    name = value.strip()
+    if not name:
+        return None
+    domain = domain_repository.get_by_type_and_name(db, type=expected_type, name=name)
+    if domain is None:
+        domain = domain_repository.create_domain(
+            db,
+            {"type": expected_type, "code": None, "name": name, "is_active": True},
+        )
+        db.flush()
+    elif not domain.is_active:
+        domain.is_active = True
+    return domain
+
+
+def _resolve_vehicle_domains(db: Session, data: dict[str, object]) -> None:
+    for text_field, (id_field, expected_type) in VEHICLE_DOMAIN_FIELDS.items():
+        if id_field in data and data[id_field] is not None:
+            domain = _active_domain(db, int(data[id_field]), expected_type, id_field)
+            data[text_field] = domain.name
+        elif text_field in data:
+            text_value = data[text_field]
+            if text_value is None or not str(text_value).strip():
+                data[text_field] = None
+                data[id_field] = None
+            else:
+                domain = _domain_for_text(db, str(text_value), expected_type)
+                data[text_field] = str(text_value).strip()
+                data[id_field] = domain.id if domain is not None else None
 
 
 def list_vehicles(
@@ -62,6 +114,7 @@ def create_vehicle(db: Session, payload: VehicleCreate) -> Vehicle:
     get_active_student_or_404(db, int(data["student_id"]))
     data["plate"] = normalize_and_validate_plate(str(data["plate"]))
     _ensure_unique_plate(db, str(data["plate"]))
+    _resolve_vehicle_domains(db, data)
 
     vehicle = vehicle_repository.create_vehicle(db, data)
     try:
@@ -87,6 +140,8 @@ def update_vehicle(db: Session, vehicle_id: int, payload: VehicleUpdate) -> Vehi
     if "plate" in data:
         data["plate"] = normalize_and_validate_plate(str(data["plate"]))
         _ensure_unique_plate(db, str(data["plate"]), current_vehicle_id=vehicle.id)
+
+    _resolve_vehicle_domains(db, data)
 
     vehicle_repository.update_vehicle(vehicle, data)
     try:
