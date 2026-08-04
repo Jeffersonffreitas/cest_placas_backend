@@ -13,6 +13,7 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - autenticacao administrativa basica com JWT
 - rotas `/api/v1/auth/login` e `/api/v1/auth/me`
 - CRUD administrativo local de alunos em `/api/v1/students`
+- CRUD administrativo local de pessoas em `/api/v1/people`
 - CRUD administrativo local de veiculos em `/api/v1/vehicles`
 - vinculo de 1 aluno para varios veiculos
 - busca de aluno por matricula em `/api/v1/students/by-registration/{registration_number}`
@@ -259,6 +260,54 @@ curl -X DELETE "http://localhost:8000/api/v1/students/1" `
 
 A desativacao marca `is_active=false` e mantem o registro em `tblalunos`.
 Matriculas ativas duplicadas sao rejeitadas.
+
+## Pessoas
+
+A tabela `tblpessoas` representa pessoas do tipo `ALUNO` ou `FUNCIONARIO`.
+A matricula (`registration_number` na API e `strmatricula` no banco) e o
+identificador operacional e nao pode se repetir entre pessoas ativas.
+
+Os endpoints protegidos sao:
+
+```text
+GET    /api/v1/people
+GET    /api/v1/people/{person_id}
+GET    /api/v1/people/by-registration/{registration_number}
+POST   /api/v1/people
+PUT    /api/v1/people/{person_id}
+DELETE /api/v1/people/{person_id}
+```
+
+A listagem aceita `person_type`, `registration_number`, `active`, `skip` e
+`limit`. `course_id` e opcional e, quando informado, deve apontar para um
+registro ativo de `tbldominios`.
+
+Exemplo de aluno:
+
+```json
+{
+  "person_type": "ALUNO",
+  "registration_number": "20260001",
+  "full_name": "Maria Silva",
+  "course_id": 15
+}
+```
+
+Exemplo de funcionario:
+
+```json
+{
+  "person_type": "FUNCIONARIO",
+  "registration_number": "F1001",
+  "full_name": "Joao Pereira",
+  "course_id": null
+}
+```
+
+`tblalunos` e os endpoints `/api/v1/students` continuam existindo por
+compatibilidade. A migration copia os alunos existentes para `tblpessoas` sem
+apaga-los ou alterar seus vinculos atuais. Os veiculos continuam vinculados a
+alunos nesta fase; uma etapa futura podera vincula-los a pessoas.
 
 ## Veiculos
 
