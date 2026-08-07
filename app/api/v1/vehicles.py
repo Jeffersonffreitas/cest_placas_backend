@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentAdminUser
 from app.db.deps import get_db
 from app.schemas.vehicle import VehicleCreate, VehicleRead, VehicleUpdate
+from app.schemas.person import PersonRead
+from app.services import person_vehicles as link_service
 from app.services import vehicles as vehicle_service
 
 
@@ -109,3 +111,21 @@ def delete_vehicle(
     del admin_user
     vehicle_service.delete_vehicle(db, vehicle_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{vehicle_id}/owners", response_model=list[PersonRead],
+    summary="List people linked to a vehicle",
+)
+def list_vehicle_owners(
+    vehicle_id: int,
+    admin_user: CurrentAdminUser,
+    db: Annotated[Session, Depends(get_db)],
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+) -> list[PersonRead]:
+    del admin_user
+    people = link_service.list_people_for_vehicle(
+        db, vehicle_id, skip=skip, limit=limit
+    )
+    return [PersonRead.model_validate(person) for person in people]

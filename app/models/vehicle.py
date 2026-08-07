@@ -62,6 +62,7 @@ class Vehicle(Base):
     brand_domain = relationship("Domain", foreign_keys=[brand_id])
     model_domain = relationship("Domain", foreign_keys=[model_id])
     color_domain = relationship("Domain", foreign_keys=[color_id])
+    person_links = relationship("PersonVehicle", back_populates="vehicle")
 
     @property
     def brand_name(self) -> str | None:

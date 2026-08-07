@@ -309,6 +309,30 @@ compatibilidade. A migration copia os alunos existentes para `tblpessoas` sem
 apaga-los ou alterar seus vinculos atuais. Os veiculos continuam vinculados a
 alunos nesta fase; uma etapa futura podera vincula-los a pessoas.
 
+### Vinculos entre pessoas e veiculos
+
+A tabela `tblpessoaveiculo` implementa a relacao N:N: uma pessoa, seja `ALUNO`
+ou `FUNCIONARIO`, pode ter varios veiculos, e um veiculo pode estar vinculado a
+mais de uma pessoa. Vinculos duplicados para o mesmo par sao rejeitados e a
+exclusao e logica, por meio de `bolativo=false`.
+
+Endpoints protegidos:
+
+```text
+GET    /api/v1/person-vehicles
+POST   /api/v1/person-vehicles
+GET    /api/v1/person-vehicles/{person_vehicle_id}
+DELETE /api/v1/person-vehicles/{person_vehicle_id}
+GET    /api/v1/people/{person_id}/vehicles
+GET    /api/v1/vehicles/{vehicle_id}/owners
+```
+
+A listagem de vinculos aceita `person_id`, `vehicle_id`, `active`, `skip` e
+`limit`. A migration converte os vinculos antigos de `tblveiculos.numalunoid`
+para `tblpessoaveiculo` usando a matricula do aluno. A coluna antiga
+`numalunoid` permanece em `tblveiculos` e continua sendo usada pelos endpoints
+legados, leituras de placa e eventos de acesso nesta fase.
+
 ## Veiculos
 
 CRUD administrativo local de veiculos. Todas as rotas de veiculos exigem o header:

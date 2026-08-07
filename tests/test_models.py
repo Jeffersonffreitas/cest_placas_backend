@@ -37,6 +37,14 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
             "dtacriacao",
             "dtaatualizacao",
         },
+        "tblpessoaveiculo": {
+            "numpessoaveiculoid",
+            "numpessoaid",
+            "numveiculoid",
+            "bolativo",
+            "dtacriacao",
+            "dtaatualizacao",
+        },
         "tblleiturasplacas": {
             "numleituraplacaid",
             "numveiculoid",
@@ -86,5 +94,7 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
     assert models.Student.id.property.columns[0].name == "numalunoid"
     assert models.Student.id.key == "id"
     assert models.Vehicle.student_id.property.columns[0].name == "numalunoid"
+    assert models.PersonVehicle.person_id.property.columns[0].name == "numpessoaid"
+    assert models.PersonVehicle.vehicle_id.property.columns[0].name == "numveiculoid"
     assert models.AccessEvent.plate_normalized.property.columns[0].name == "strplacanormalizada"
     assert models.User.username.property.columns[0].name == "strusuario"
