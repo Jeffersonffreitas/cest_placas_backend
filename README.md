@@ -80,8 +80,8 @@ Copy-Item .env.example .env
   `tblalunos`, `tblveiculos`, `tblleiturasplacas`, `tbleventosacesso`,
   `tblusuarios` e `tbllogsauditoria`.
 - As colunas fisicas usam nomes em minusculo e o padrao solicitado pela
-  faculdade: `num` para numeros/identificadores, `str` para textos, `dta` para
-  datas, `dec` para decimais e `bol` para campos booleanos.
+  coordenacao: `int` para IDs e numeros inteiros, `num` para decimais, `str`
+  para textos, `dta` para datas e `bol` para campos booleanos.
 - A API preserva os nomes JSON em snake_case, como `student_id`,
   `registration_number`, `full_name`, `vehicle_id`, `plate`, `source`,
   `status`, `confidence`, `created_at` e `updated_at`.
@@ -91,11 +91,11 @@ Copy-Item .env.example .env
 Exemplos de colunas fisicas:
 
 ```text
-tblalunos.numalunoid
+tblalunos.intalunoid
 tblalunos.strmatricula
-tblveiculos.numveiculoid
+tblveiculos.intveiculoid
 tblveiculos.strplaca
-tblleiturasplacas.decconfianca
+tblleiturasplacas.numconfianca
 tbleventosacesso.strplacanormalizada
 tbleventosacesso.dtacriacao
 tblusuarios.strusuario
@@ -328,9 +328,9 @@ GET    /api/v1/vehicles/{vehicle_id}/owners
 ```
 
 A listagem de vinculos aceita `person_id`, `vehicle_id`, `active`, `skip` e
-`limit`. A migration converte os vinculos antigos de `tblveiculos.numalunoid`
+`limit`. A migration converte os vinculos antigos de `tblveiculos.intalunoid`
 para `tblpessoaveiculo` usando a matricula do aluno. A coluna antiga
-`numalunoid` permanece em `tblveiculos` e continua sendo usada pelos endpoints
+`intalunoid` permanece em `tblveiculos` e continua sendo usada pelos endpoints
 legados, leituras de placa e eventos de acesso nesta fase.
 
 ## Veiculos
@@ -359,7 +359,7 @@ os tipos `MARCA_VEICULO`, `MODELO_VEICULO` e `COR_VEICULO`. A API aceita tanto
 `brand_id`, `model_id` e `color_id` quanto os campos textuais antigos `brand`,
 `model` e `color`. Ao receber texto, localiza ou cria o dominio correspondente.
 
-No banco, `nummarcaid`, `nummodeloid` e `numcorid` sao os novos campos
+No banco, `intmarcaid`, `intmodeloid` e `intcorid` sao os campos
 estruturados de `tblveiculos`. As colunas `strmarca`, `strmodelo` e `strcor`
 foram mantidas temporariamente e continuam sendo preenchidas para
 compatibilidade. As respostas incluem os IDs e tambem `brand_name`,

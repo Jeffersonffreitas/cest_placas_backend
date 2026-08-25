@@ -10,17 +10,17 @@ class AccessEvent(Base):
     __tablename__ = "tbleventosacesso"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("numeventoacessoid", primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column("inteventoacessoid", primary_key=True, autoincrement=True)
     plate_input: Mapped[str] = mapped_column("strplacaentrada", String(20), nullable=False)
     plate_normalized: Mapped[str] = mapped_column("strplacanormalizada", String(10), nullable=False)
     student_id: Mapped[int | None] = mapped_column(
-        "numalunoid",
-        ForeignKey("tblalunos.numalunoid", name="fk_tbleventosacesso_aluno", ondelete="SET NULL"),
+        "intalunoid",
+        ForeignKey("tblalunos.intalunoid", name="fk_tbleventosacesso_aluno", ondelete="SET NULL"),
         nullable=True,
     )
     vehicle_id: Mapped[int | None] = mapped_column(
-        "numveiculoid",
-        ForeignKey("tblveiculos.numveiculoid", name="fk_tbleventosacesso_veiculo", ondelete="SET NULL"),
+        "intveiculoid",
+        ForeignKey("tblveiculos.intveiculoid", name="fk_tbleventosacesso_veiculo", ondelete="SET NULL"),
         nullable=True,
     )
     source: Mapped[str] = mapped_column(

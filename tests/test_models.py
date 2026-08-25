@@ -17,7 +17,7 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
 
     expected_columns_by_table = {
         "tblalunos": {
-            "numalunoid",
+            "intalunoid",
             "strmatricula",
             "strnomecompleto",
             "stremail",
@@ -27,39 +27,58 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
             "dtaatualizacao",
         },
         "tblveiculos": {
-            "numveiculoid",
-            "numalunoid",
+            "intveiculoid",
+            "intalunoid",
             "strplaca",
             "strmarca",
             "strmodelo",
             "strcor",
+            "intmarcaid",
+            "intmodeloid",
+            "intcorid",
             "bolativo",
             "dtacriacao",
             "dtaatualizacao",
         },
+        "tblpessoas": {
+            "intpessoaid",
+            "intcursoid",
+            "strtipopessoa",
+            "strmatricula",
+            "strnomecompleto",
+            "bolativo",
+        },
+        "tbldominios": {
+            "intdominioid",
+            "intdominiopaiid",
+            "strtipo",
+            "strcodigo",
+            "strnome",
+            "bolativo",
+        },
         "tblpessoaveiculo": {
-            "numpessoaveiculoid",
-            "numpessoaid",
-            "numveiculoid",
+            "intpessoaveiculoid",
+            "intpessoaid",
+            "intveiculoid",
             "bolativo",
             "dtacriacao",
             "dtaatualizacao",
         },
         "tblleiturasplacas": {
-            "numleituraplacaid",
-            "numveiculoid",
+            "intleituraplacaid",
+            "intveiculoid",
             "strplaca",
             "strorigem",
-            "decconfianca",
+            "numconfianca",
             "strcaminhoimagem",
             "dtaleitura",
             "dtacriacao",
             "dtaatualizacao",
         },
         "tbleventosacesso": {
-            "numeventoacessoid",
-            "numveiculoid",
-            "numalunoid",
+            "inteventoacessoid",
+            "intveiculoid",
+            "intalunoid",
             "strsituacao",
             "dtacriacao",
             "strplacaentrada",
@@ -67,7 +86,7 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
             "strorigem",
         },
         "tblusuarios": {
-            "numusuarioid",
+            "intusuarioid",
             "strusuario",
             "strnomecompleto",
             "strsenhahash",
@@ -77,11 +96,11 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
             "dtaatualizacao",
         },
         "tbllogsauditoria": {
-            "numlogauditoriaid",
-            "numusuarioid",
+            "intlogauditoriaid",
+            "intusuarioid",
             "stracao",
             "strentidade",
-            "numentidadeid",
+            "intentidadeid",
             "strdetalhes",
             "dtacriacao",
         },
@@ -91,10 +110,29 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
         actual_columns = {column["name"] for column in inspector.get_columns(table_name)}
         assert expected_columns.issubset(actual_columns)
 
-    assert models.Student.id.property.columns[0].name == "numalunoid"
+    assert models.Student.id.property.columns[0].name == "intalunoid"
     assert models.Student.id.key == "id"
-    assert models.Vehicle.student_id.property.columns[0].name == "numalunoid"
-    assert models.PersonVehicle.person_id.property.columns[0].name == "numpessoaid"
-    assert models.PersonVehicle.vehicle_id.property.columns[0].name == "numveiculoid"
+    assert models.Vehicle.student_id.property.columns[0].name == "intalunoid"
+    assert models.PersonVehicle.person_id.property.columns[0].name == "intpessoaid"
+    assert models.PersonVehicle.vehicle_id.property.columns[0].name == "intveiculoid"
     assert models.AccessEvent.plate_normalized.property.columns[0].name == "strplacanormalizada"
     assert models.User.username.property.columns[0].name == "strusuario"
+
+
+def test_main_models_still_persist_with_python_attribute_names(
+    db_session: Session,
+) -> None:
+    student = models.Student(
+        registration_number="MIG-001", full_name="Teste Migration"
+    )
+    db_session.add(student)
+    db_session.flush()
+
+    vehicle = models.Vehicle(student_id=student.id, plate="MIG1A23")
+    db_session.add(vehicle)
+    db_session.commit()
+
+    persisted = db_session.get(models.Vehicle, vehicle.id)
+    assert persisted is not None
+    assert persisted.student_id == student.id
+    assert persisted.plate == "MIG1A23"

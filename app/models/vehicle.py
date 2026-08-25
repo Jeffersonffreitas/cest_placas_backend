@@ -10,10 +10,10 @@ class Vehicle(Base):
     __tablename__ = "tblveiculos"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("numveiculoid", primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column("intveiculoid", primary_key=True, autoincrement=True)
     student_id: Mapped[int] = mapped_column(
-        "numalunoid",
-        ForeignKey("tblalunos.numalunoid", name="fk_tblveiculos_aluno", ondelete="RESTRICT"),
+        "intalunoid",
+        ForeignKey("tblalunos.intalunoid", name="fk_tblveiculos_aluno", ondelete="RESTRICT"),
         nullable=False,
     )
     plate: Mapped[str] = mapped_column("strplaca", String(10), nullable=False)
@@ -21,18 +21,18 @@ class Vehicle(Base):
     model: Mapped[str | None] = mapped_column("strmodelo", String(100), nullable=True)
     color: Mapped[str | None] = mapped_column("strcor", String(50), nullable=True)
     brand_id: Mapped[int | None] = mapped_column(
-        "nummarcaid",
-        ForeignKey("tbldominios.numdominioid", name="fk_tblveiculos_marca", ondelete="RESTRICT"),
+        "intmarcaid",
+        ForeignKey("tbldominios.intdominioid", name="fk_tblveiculos_marca", ondelete="RESTRICT"),
         nullable=True,
     )
     model_id: Mapped[int | None] = mapped_column(
-        "nummodeloid",
-        ForeignKey("tbldominios.numdominioid", name="fk_tblveiculos_modelo", ondelete="RESTRICT"),
+        "intmodeloid",
+        ForeignKey("tbldominios.intdominioid", name="fk_tblveiculos_modelo", ondelete="RESTRICT"),
         nullable=True,
     )
     color_id: Mapped[int | None] = mapped_column(
-        "numcorid",
-        ForeignKey("tbldominios.numdominioid", name="fk_tblveiculos_cor", ondelete="RESTRICT"),
+        "intcorid",
+        ForeignKey("tbldominios.intdominioid", name="fk_tblveiculos_cor", ondelete="RESTRICT"),
         nullable=True,
     )
     is_active: Mapped[bool] = mapped_column(
@@ -79,7 +79,7 @@ class Vehicle(Base):
 
 Index("ix_tblveiculos_placa", Vehicle.plate, unique=True)
 Index("ix_tblveiculos_aluno", Vehicle.student_id)
-Index("idx_tblveiculos_nummarcaid", Vehicle.brand_id)
-Index("idx_tblveiculos_nummodeloid", Vehicle.model_id)
-Index("idx_tblveiculos_numcorid", Vehicle.color_id)
+Index("idx_tblveiculos_intmarcaid", Vehicle.brand_id)
+Index("idx_tblveiculos_intmodeloid", Vehicle.model_id)
+Index("idx_tblveiculos_intcorid", Vehicle.color_id)
 

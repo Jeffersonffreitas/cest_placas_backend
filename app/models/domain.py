@@ -10,13 +10,13 @@ class Domain(Base):
     __tablename__ = "tbldominios"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("numdominioid", primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column("intdominioid", primary_key=True, autoincrement=True)
     type: Mapped[str] = mapped_column("strtipo", String(50), nullable=False)
     code: Mapped[str | None] = mapped_column("strcodigo", String(100), nullable=True)
     name: Mapped[str] = mapped_column("strnome", String(255), nullable=False)
     parent_id: Mapped[int | None] = mapped_column(
-        "numdominiopaiid",
-        ForeignKey("tbldominios.numdominioid", name="fk_tbldominios_pai", ondelete="RESTRICT"),
+        "intdominiopaiid",
+        ForeignKey("tbldominios.intdominioid", name="fk_tbldominios_pai", ondelete="RESTRICT"),
         nullable=True,
     )
     is_active: Mapped[bool] = mapped_column(

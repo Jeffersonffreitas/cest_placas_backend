@@ -11,10 +11,10 @@ class PlateRead(Base):
     __tablename__ = "tblleiturasplacas"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("numleituraplacaid", primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column("intleituraplacaid", primary_key=True, autoincrement=True)
     vehicle_id: Mapped[int | None] = mapped_column(
-        "numveiculoid",
-        ForeignKey("tblveiculos.numveiculoid", name="fk_tblleiturasplacas_veiculo", ondelete="SET NULL"),
+        "intveiculoid",
+        ForeignKey("tblveiculos.intveiculoid", name="fk_tblleiturasplacas_veiculo", ondelete="SET NULL"),
         nullable=True,
     )
     plate: Mapped[str] = mapped_column("strplaca", String(10), nullable=False)
@@ -25,7 +25,7 @@ class PlateRead(Base):
         default="manual",
         server_default="manual",
     )
-    confidence: Mapped[Decimal | None] = mapped_column("decconfianca", Numeric(5, 2), nullable=True)
+    confidence: Mapped[Decimal | None] = mapped_column("numconfianca", Numeric(5, 2), nullable=True)
     image_path: Mapped[str | None] = mapped_column("strcaminhoimagem", String(255), nullable=True)
     read_at: Mapped[datetime] = mapped_column("dtaleitura", DateTime(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(

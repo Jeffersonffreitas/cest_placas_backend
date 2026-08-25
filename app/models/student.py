@@ -10,7 +10,7 @@ class Student(Base):
     __tablename__ = "tblalunos"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("numalunoid", primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column("intalunoid", primary_key=True, autoincrement=True)
     registration_number: Mapped[str] = mapped_column("strmatricula", String(50), nullable=False)
     full_name: Mapped[str] = mapped_column("strnomecompleto", String(255), nullable=False)
     email: Mapped[str | None] = mapped_column("stremail", String(255), nullable=True)

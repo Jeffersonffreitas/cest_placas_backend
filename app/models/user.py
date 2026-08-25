@@ -10,7 +10,7 @@ class User(Base):
     __tablename__ = "tblusuarios"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("numusuarioid", primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column("intusuarioid", primary_key=True, autoincrement=True)
     username: Mapped[str] = mapped_column("strusuario", String(100), nullable=False)
     full_name: Mapped[str | None] = mapped_column("strnomecompleto", String(255), nullable=True)
     password_hash: Mapped[str] = mapped_column("strsenhahash", String(255), nullable=False)

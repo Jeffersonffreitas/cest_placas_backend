@@ -10,15 +10,15 @@ class AuditLog(Base):
     __tablename__ = "tbllogsauditoria"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
-    id: Mapped[int] = mapped_column("numlogauditoriaid", primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column("intlogauditoriaid", primary_key=True, autoincrement=True)
     user_id: Mapped[int | None] = mapped_column(
-        "numusuarioid",
-        ForeignKey("tblusuarios.numusuarioid", name="fk_tbllogsauditoria_usuario", ondelete="SET NULL"),
+        "intusuarioid",
+        ForeignKey("tblusuarios.intusuarioid", name="fk_tbllogsauditoria_usuario", ondelete="SET NULL"),
         nullable=True,
     )
     action: Mapped[str] = mapped_column("stracao", String(100), nullable=False)
     entity_name: Mapped[str] = mapped_column("strentidade", String(100), nullable=False)
-    entity_id: Mapped[str | None] = mapped_column("numentidadeid", String(50), nullable=True)
+    entity_id: Mapped[str | None] = mapped_column("intentidadeid", String(50), nullable=True)
     details: Mapped[dict | None] = mapped_column("strdetalhes", JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         "dtacriacao",
