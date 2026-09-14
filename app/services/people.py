@@ -54,13 +54,13 @@ def _validate_course(db: Session, course_id: int | None) -> None:
 
 
 def _ensure_unique_active_registration(
-    db: Session, registration_number: str, *, is_active: bool,
+    db: Session, registration_number: str, person_type: str, *, is_active: bool,
     current_person_id: int | None = None,
 ) -> None:
     if not is_active:
         return
     person = person_repository.get_active_person_by_registration_number(
-        db, registration_number
+        db, registration_number, person_type
     )
     if person is not None and person.id != current_person_id:
         raise AppException(
@@ -87,9 +87,10 @@ def _commit(db: Session, person: Person) -> Person:
 def create_person(db: Session, payload: PersonCreate) -> Person:
     data = payload.model_dump()
     registration_number = str(data["registration_number"])
+    person_type = str(data["person_type"])
     _validate_course(db, data.get("course_id") if isinstance(data.get("course_id"), int) else None)
     _ensure_unique_active_registration(
-        db, registration_number, is_active=bool(data["is_active"])
+        db, registration_number, person_type, is_active=bool(data["is_active"])
     )
     return _commit(db, person_repository.create_person(db, data))
 
@@ -100,9 +101,11 @@ def update_person(db: Session, person_id: int, payload: PersonUpdate) -> Person:
     course_id = data.get("course_id", person.course_id)
     _validate_course(db, course_id if isinstance(course_id, int) else None)
     registration_number = str(data.get("registration_number", person.registration_number))
+    person_type = str(data.get("person_type", person.person_type))
     is_active = bool(data.get("is_active", person.is_active))
     _ensure_unique_active_registration(
-        db, registration_number, is_active=is_active, current_person_id=person.id
+        db, registration_number, person_type, is_active=is_active,
+        current_person_id=person.id,
     )
     person_repository.update_person(person, data)
     return _commit(db, person)

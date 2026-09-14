@@ -47,10 +47,16 @@ def test_people_crud_filters_lookup_update_and_deactivate(client: TestClient) ->
         client, headers, person_type="FUNCIONARIO",
         registration_number="F1001", full_name="Fabio Funcionario",
     )
+    visitor = _create_person(
+        client, headers, person_type="VISITANTE",
+        registration_number="V1001", full_name="Valeria Visitante",
+    )
 
     response = client.get("/api/v1/people", headers=headers)
     assert response.status_code == 200
-    assert [person["id"] for person in response.json()] == [student["id"], employee["id"]]
+    assert [person["id"] for person in response.json()] == [
+        student["id"], employee["id"], visitor["id"],
+    ]
     response = client.get(
         "/api/v1/people?registration_number=F1001&skip=0&limit=1", headers=headers
     )
@@ -58,7 +64,11 @@ def test_people_crud_filters_lookup_update_and_deactivate(client: TestClient) ->
     assert [person["id"] for person in response.json()] == [employee["id"]]
     assert client.get("/api/v1/people?limit=101", headers=headers).status_code == 422
 
-    for person_type, expected_id in (("ALUNO", student["id"]), ("FUNCIONARIO", employee["id"])):
+    for person_type, expected_id in (
+        ("ALUNO", student["id"]),
+        ("FUNCIONARIO", employee["id"]),
+        ("VISITANTE", visitor["id"]),
+    ):
         response = client.get(
             f"/api/v1/people?person_type={person_type}", headers=headers
         )
@@ -93,7 +103,7 @@ def test_people_crud_filters_lookup_update_and_deactivate(client: TestClient) ->
 @pytest.mark.parametrize(
     ("payload", "expected_status"),
     [
-        ({"person_type": "VISITANTE", "registration_number": "V1", "full_name": "Visitante"}, 422),
+        ({"person_type": "DESCONHECIDO", "registration_number": "V1", "full_name": "Visitante"}, 422),
         ({"person_type": "ALUNO", "registration_number": "", "full_name": "Sem Matricula"}, 422),
         ({"person_type": "ALUNO", "registration_number": "A1", "full_name": ""}, 422),
     ],
@@ -114,7 +124,7 @@ def test_person_rejects_duplicate_active_registration(client: TestClient) -> Non
     response = client.post(
         "/api/v1/people",
         json={
-            "person_type": "FUNCIONARIO",
+            "person_type": "ALUNO",
             "registration_number": "DUP100",
             "full_name": "Segunda Pessoa",
         },
@@ -122,6 +132,21 @@ def test_person_rejects_duplicate_active_registration(client: TestClient) -> Non
     )
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "person_registration_number_conflict"
+
+
+def test_active_registration_can_repeat_for_another_person_type(
+    client: TestClient,
+) -> None:
+    headers = _headers(client)
+    _create_person(
+        client, headers, person_type="ALUNO",
+        registration_number="SHARED100", full_name="Aluno Compartilhado",
+    )
+    employee = _create_person(
+        client, headers, person_type="FUNCIONARIO",
+        registration_number="SHARED100", full_name="Funcionario Compartilhado",
+    )
+    assert employee["person_type"] == "FUNCIONARIO"
 
 
 def test_person_validates_active_course_domain(client: TestClient) -> None:
@@ -167,7 +192,9 @@ def test_people_endpoints_require_authentication(client: TestClient) -> None:
     assert client.delete("/api/v1/people/1").status_code == 401
 
 
-def test_students_and_vehicles_endpoints_remain_compatible(client: TestClient) -> None:
+def test_students_and_vehicles_endpoints_remain_compatible(
+    client: TestClient, db_session: Session,
+) -> None:
     headers = _headers(client)
     student_response = client.post(
         "/api/v1/students",
@@ -175,6 +202,14 @@ def test_students_and_vehicles_endpoints_remain_compatible(client: TestClient) -
         headers=headers,
     )
     assert student_response.status_code == 201
+    person = db_session.scalar(
+        select(Person).where(
+            Person.person_type == "ALUNO",
+            Person.registration_number == "LEG100",
+        )
+    )
+    assert person is not None
+    assert person.id == student_response.json()["id"]
     vehicle_response = client.post(
         "/api/v1/vehicles",
         json={
@@ -185,6 +220,33 @@ def test_students_and_vehicles_endpoints_remain_compatible(client: TestClient) -
     )
     assert vehicle_response.status_code == 201
     assert vehicle_response.json()["student_id"] == student_response.json()["id"]
+
+
+def test_students_endpoint_uses_people_as_its_primary_source(
+    client: TestClient, db_session: Session,
+) -> None:
+    headers = _headers(client)
+    student_id = _create_person(
+        client, headers, person_type="ALUNO",
+        registration_number="MAIN100", full_name="Aluno Principal",
+    )["id"]
+    _create_person(
+        client, headers, person_type="FUNCIONARIO",
+        registration_number="MAIN200", full_name="Funcionario Fora da Lista",
+    )
+
+    response = client.get("/api/v1/students", headers=headers)
+
+    assert response.status_code == 200
+    assert [student["id"] for student in response.json()] == [student_id]
+    lookup = client.get(
+        "/api/v1/students/by-registration/MAIN100", headers=headers
+    )
+    assert lookup.status_code == 200
+    assert lookup.json()["id"] == student_id
+    assert db_session.scalar(
+        select(Person).where(Person.registration_number == "MAIN100")
+    ) is not None
 
 
 def test_student_copy_is_idempotent_and_preserves_legacy_student(

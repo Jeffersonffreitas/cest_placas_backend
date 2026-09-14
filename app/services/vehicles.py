@@ -111,7 +111,8 @@ def _ensure_unique_plate(
 
 def create_vehicle(db: Session, payload: VehicleCreate) -> Vehicle:
     data = payload.model_dump()
-    get_active_student_or_404(db, int(data["student_id"]))
+    legacy_student = get_active_student_or_404(db, int(data["student_id"]))
+    data["student_id"] = legacy_student.id
     data["plate"] = normalize_and_validate_plate(str(data["plate"]))
     _ensure_unique_plate(db, str(data["plate"]))
     _resolve_vehicle_domains(db, data)
@@ -135,7 +136,8 @@ def update_vehicle(db: Session, vehicle_id: int, payload: VehicleUpdate) -> Vehi
     data = payload.model_dump(exclude_unset=True)
 
     if "student_id" in data:
-        get_active_student_or_404(db, int(data["student_id"]))
+        legacy_student = get_active_student_or_404(db, int(data["student_id"]))
+        data["student_id"] = legacy_student.id
 
     if "plate" in data:
         data["plate"] = normalize_and_validate_plate(str(data["plate"]))

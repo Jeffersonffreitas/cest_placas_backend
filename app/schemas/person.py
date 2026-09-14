@@ -6,7 +6,7 @@ from pydantic import Field, field_validator
 from app.schemas.common import BaseSchema, ORMBaseSchema
 
 
-PersonType = Literal["ALUNO", "FUNCIONARIO"]
+PersonType = Literal["ALUNO", "FUNCIONARIO", "VISITANTE"]
 
 
 class PersonBase(BaseSchema):

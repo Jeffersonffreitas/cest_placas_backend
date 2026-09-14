@@ -258,14 +258,18 @@ curl -X DELETE "http://localhost:8000/api/v1/students/1" `
   -H "Authorization: Bearer jwt_token"
 ```
 
-A desativacao marca `is_active=false` e mantem o registro em `tblalunos`.
-Matriculas ativas duplicadas sao rejeitadas.
+A desativacao marca `is_active=false`. Os endpoints de alunos usam
+`tblpessoas` com `strtipopessoa = 'ALUNO'` como fonte principal e mantem o
+registro equivalente em `tblalunos` apenas para compatibilidade com os fluxos
+legados de veiculos e eventos.
 
 ## Pessoas
 
-A tabela `tblpessoas` representa pessoas do tipo `ALUNO` ou `FUNCIONARIO`.
+A tabela `tblpessoas` e a tabela principal de pessoas do sistema e representa
+os tipos `ALUNO`, `FUNCIONARIO` e `VISITANTE`.
 A matricula (`registration_number` na API e `strmatricula` no banco) e o
-identificador operacional e nao pode se repetir entre pessoas ativas.
+identificador operacional e nao pode se repetir entre pessoas ativas do mesmo
+tipo.
 
 Os endpoints protegidos sao:
 
@@ -304,17 +308,28 @@ Exemplo de funcionario:
 }
 ```
 
+Exemplo de visitante:
+
+```json
+{
+  "person_type": "VISITANTE",
+  "registration_number": "V1001",
+  "full_name": "Visitante Credenciado",
+  "course_id": null
+}
+```
+
 `tblalunos` e os endpoints `/api/v1/students` continuam existindo por
-compatibilidade. A migration copia os alunos existentes para `tblpessoas` sem
-apaga-los ou alterar seus vinculos atuais. Os veiculos continuam vinculados a
-alunos nesta fase; uma etapa futura podera vincula-los a pessoas.
+compatibilidade. Criacoes e alteracoes feitas por `/api/v1/students` usam
+`tblpessoas` como fonte principal e sincronizam o registro legado sem apagar
+dados. A integracao com o RM ainda nao foi implementada.
 
 ### Vinculos entre pessoas e veiculos
 
-A tabela `tblpessoaveiculo` implementa a relacao N:N: uma pessoa, seja `ALUNO`
-ou `FUNCIONARIO`, pode ter varios veiculos, e um veiculo pode estar vinculado a
-mais de uma pessoa. Vinculos duplicados para o mesmo par sao rejeitados e a
-exclusao e logica, por meio de `bolativo=false`.
+A tabela `tblpessoaveiculo` implementa a relacao N:N entre pessoas e veiculos.
+Uma pessoa de qualquer tipo aceito pode ter varios veiculos, e um veiculo pode
+estar vinculado a mais de uma pessoa. Vinculos duplicados para o mesmo par sao
+rejeitados e a exclusao e logica, por meio de `bolativo=false`.
 
 Endpoints protegidos:
 

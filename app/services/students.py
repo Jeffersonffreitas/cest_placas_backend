@@ -2,16 +2,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
+from app.models.person import Person
 from app.models.student import Student
 from app.repositories import students as student_repository
 from app.schemas.student import StudentCreate, StudentUpdate
 
 
-def list_students(db: Session, *, skip: int = 0, limit: int = 100) -> list[Student]:
+def list_students(db: Session, *, skip: int = 0, limit: int = 100) -> list[Person]:
     return student_repository.list_students(db, skip=skip, limit=limit)
 
 
-def get_student_or_404(db: Session, student_id: int) -> Student:
+def get_student_or_404(db: Session, student_id: int) -> Person:
     student = student_repository.get_student(db, student_id)
     if student is None:
         raise AppException(
@@ -23,20 +24,51 @@ def get_student_or_404(db: Session, student_id: int) -> Student:
 
 
 def get_active_student_or_404(db: Session, student_id: int) -> Student:
-    student = get_student_or_404(db, student_id)
-    if not student.is_active:
+    person = student_repository.get_student(db, student_id)
+    if person is None:
+        legacy = db.get(Student, student_id)
+        if legacy is None:
+            raise AppException(
+                "Student was not found.", status_code=404, code="student_not_found"
+            )
+        if not legacy.is_active:
+            raise AppException(
+                "Student is inactive.", status_code=409, code="student_inactive"
+            )
+        return legacy
+    if not person.is_active:
         raise AppException(
             "Student is inactive.",
             status_code=409,
             code="student_inactive",
         )
-    return student
+    legacy = student_repository.get_legacy_student_by_registration_number(
+        db, person.registration_number
+    )
+    if legacy is None:
+        legacy = student_repository.create_legacy_student(
+            db,
+            {
+                "registration_number": person.registration_number,
+                "full_name": person.full_name,
+                "email": person.email,
+                "phone": person.phone,
+                "is_active": person.is_active,
+            },
+            preferred_id=person.id,
+        )
+        db.flush()
+    if not legacy.is_active:
+        raise AppException(
+            "Student is inactive.", status_code=409, code="student_inactive"
+        )
+    return legacy
 
 
 def get_student_by_registration_number_or_404(
     db: Session,
     registration_number: str,
-) -> Student:
+) -> Person:
     student = student_repository.get_student_by_registration_number(
         db,
         registration_number,
@@ -83,13 +115,15 @@ def _ensure_unique_email(
         )
 
 
-def create_student(db: Session, payload: StudentCreate) -> Student:
+def create_student(db: Session, payload: StudentCreate) -> Person:
     data = payload.model_dump()
     _ensure_unique_registration_number(db, str(data["registration_number"]))
     _ensure_unique_email(db, data.get("email") if isinstance(data.get("email"), str) else None)
 
     student = student_repository.create_student(db, data)
     try:
+        db.flush()
+        student_repository.create_legacy_student(db, data, preferred_id=student.id)
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -102,9 +136,10 @@ def create_student(db: Session, payload: StudentCreate) -> Student:
     return student
 
 
-def update_student(db: Session, student_id: int, payload: StudentUpdate) -> Student:
+def update_student(db: Session, student_id: int, payload: StudentUpdate) -> Person:
     student = get_student_or_404(db, student_id)
     data = payload.model_dump(exclude_unset=True)
+    old_registration_number = student.registration_number
 
     registration_number = data.get("registration_number")
     if isinstance(registration_number, str):
@@ -123,6 +158,11 @@ def update_student(db: Session, student_id: int, payload: StudentUpdate) -> Stud
         )
 
     student_repository.update_student(student, data)
+    legacy = student_repository.get_legacy_student_by_registration_number(
+        db, old_registration_number
+    )
+    if legacy is not None:
+        student_repository.update_legacy_student(legacy, data)
     try:
         db.commit()
     except IntegrityError:
@@ -139,4 +179,9 @@ def update_student(db: Session, student_id: int, payload: StudentUpdate) -> Stud
 def delete_student(db: Session, student_id: int) -> None:
     student = get_student_or_404(db, student_id)
     student_repository.deactivate_student(student)
+    legacy = student_repository.get_legacy_student_by_registration_number(
+        db, student.registration_number
+    )
+    if legacy is not None:
+        student_repository.deactivate_legacy_student(legacy)
     db.commit()

@@ -12,7 +12,7 @@ class Person(Base):
     __tablename__ = "tblpessoas"
     __table_args__ = (
         CheckConstraint(
-            "strtipopessoa IN ('ALUNO', 'FUNCIONARIO')",
+            "strtipopessoa IN ('ALUNO', 'FUNCIONARIO', 'VISITANTE')",
             name="ck_tblpessoas_tipopessoa",
         ),
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
@@ -57,5 +57,8 @@ Index("idx_tblpessoas_strmatricula", Person.registration_number)
 Index("idx_tblpessoas_bolativo", Person.is_active)
 Index("idx_tblpessoas_intcursoid", Person.course_id)
 Index(
-    "uq_tblpessoas_strmatriculaativa", Person.active_registration_number, unique=True
+    "uq_tblpessoas_tipo_matriculaativa",
+    Person.person_type,
+    Person.active_registration_number,
+    unique=True,
 )

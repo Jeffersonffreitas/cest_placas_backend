@@ -18,7 +18,9 @@ router = APIRouter(tags=["people"])
 def list_people(
     admin_user: CurrentAdminUser,
     db: Annotated[Session, Depends(get_db)],
-    person_type: Annotated[Literal["ALUNO", "FUNCIONARIO"] | None, Query()] = None,
+    person_type: Annotated[
+        Literal["ALUNO", "FUNCIONARIO", "VISITANTE"] | None, Query()
+    ] = None,
     registration_number: Annotated[str | None, Query(min_length=1)] = None,
     active: Annotated[bool | None, Query()] = None,
     skip: Annotated[int, Query(ge=0)] = 0,

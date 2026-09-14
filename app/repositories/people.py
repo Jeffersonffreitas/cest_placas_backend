@@ -36,10 +36,11 @@ def get_person_by_registration_number(
 
 
 def get_active_person_by_registration_number(
-    db: Session, registration_number: str,
+    db: Session, registration_number: str, person_type: str,
 ) -> Person | None:
     statement = select(Person).where(
         Person.registration_number == registration_number,
+        Person.person_type == person_type,
         Person.is_active.is_(True),
     )
     return db.scalars(statement).first()
