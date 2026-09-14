@@ -39,6 +39,10 @@ def _columns(table_name: str) -> set[str]:
     return {column["name"] for column in inspector.get_columns(table_name)}
 
 
+def _first_column(columns: set[str], *candidates: str) -> str | None:
+    return next((candidate for candidate in candidates if candidate in columns), None)
+
+
 def _index_and_unique_names() -> set[str]:
     if not _inspector().has_table(LINKS):
         return set()
@@ -106,46 +110,51 @@ def _copy_legacy_links() -> None:
     person_columns = _columns(PEOPLE)
     vehicle_columns = _columns(VEHICLES)
     student_columns = _columns(STUDENTS)
-    if not {
-        "numpessoaid", "numveiculoid", "bolativo", "dtacriacao", "dtaatualizacao",
-    }.issubset(link_columns):
+    link_person_id = _first_column(link_columns, "intpessoaid", "numpessoaid")
+    link_vehicle_id = _first_column(link_columns, "intveiculoid", "numveiculoid")
+    person_id = _first_column(person_columns, "intpessoaid", "numpessoaid")
+    vehicle_id = _first_column(vehicle_columns, "intveiculoid", "numveiculoid")
+    vehicle_student_id = _first_column(vehicle_columns, "intalunoid", "numalunoid")
+    student_id = _first_column(student_columns, "intalunoid", "numalunoid")
+    if not all(
+        (link_person_id, link_vehicle_id, person_id, vehicle_id,
+         vehicle_student_id, student_id)
+    ):
         return
-    if not {
-        "numpessoaid", "strtipopessoa", "strmatricula", "bolativo",
-    }.issubset(person_columns):
+    if not {"bolativo", "dtacriacao", "dtaatualizacao"}.issubset(link_columns):
         return
-    if not {
-        "numveiculoid", "numalunoid", "dtacriacao", "dtaatualizacao",
-    }.issubset(vehicle_columns):
+    if not {"strtipopessoa", "strmatricula", "bolativo"}.issubset(person_columns):
         return
-    if not {"numalunoid", "strmatricula"}.issubset(student_columns):
+    if not {"dtacriacao", "dtaatualizacao"}.issubset(vehicle_columns):
+        return
+    if "strmatricula" not in student_columns:
         return
 
     op.get_bind().execute(
         sa.text(
             f"""
             INSERT INTO {LINKS} (
-                numpessoaid, numveiculoid, bolativo, dtacriacao, dtaatualizacao
+                {link_person_id}, {link_vehicle_id}, bolativo, dtacriacao, dtaatualizacao
             )
-            SELECT mapping.numpessoaid, vehicle.numveiculoid, 1,
+            SELECT mapping.person_id, vehicle.{vehicle_id}, 1,
                    vehicle.dtacriacao, vehicle.dtaatualizacao
             FROM {VEHICLES} vehicle
             JOIN {STUDENTS} student
-              ON student.numalunoid = vehicle.numalunoid
+              ON student.{student_id} = vehicle.{vehicle_student_id}
             JOIN (
                 SELECT person.strmatricula,
                        COALESCE(
-                           MIN(CASE WHEN person.bolativo = 1 THEN person.numpessoaid END),
-                           MIN(person.numpessoaid)
-                       ) AS numpessoaid
+                           MIN(CASE WHEN person.bolativo = 1 THEN person.{person_id} END),
+                           MIN(person.{person_id})
+                       ) AS person_id
                 FROM {PEOPLE} person
                 WHERE person.strtipopessoa = 'ALUNO'
                 GROUP BY person.strmatricula
             ) mapping ON mapping.strmatricula = student.strmatricula
             WHERE NOT EXISTS (
                 SELECT 1 FROM {LINKS} existing_link
-                WHERE existing_link.numpessoaid = mapping.numpessoaid
-                  AND existing_link.numveiculoid = vehicle.numveiculoid
+                WHERE existing_link.{link_person_id} = mapping.person_id
+                  AND existing_link.{link_vehicle_id} = vehicle.{vehicle_id}
             )
             """
         )

@@ -33,21 +33,31 @@ def _inspector():
     return inspect(op.get_bind())
 
 
+def _table_exists(table_name: str) -> bool:
+    """Check the live schema instead of relying on cached migration state."""
+    inspector = _inspector()
+    return table_name in inspector.get_table_names() or inspector.has_table(table_name)
+
+
 def _columns(table_name: str) -> set[str]:
     inspector = _inspector()
-    if not inspector.has_table(table_name):
+    if not _table_exists(table_name):
         return set()
     return {column["name"] for column in inspector.get_columns(table_name)}
 
 
+def _first_column(columns: set[str], *candidates: str) -> str | None:
+    return next((candidate for candidate in candidates if candidate in columns), None)
+
+
 def _index_names() -> set[str]:
-    if not _inspector().has_table(PEOPLE):
+    if not _table_exists(PEOPLE):
         return set()
     return {index["name"] for index in _inspector().get_indexes(PEOPLE)}
 
 
 def _course_fk_exists() -> bool:
-    if not _inspector().has_table(PEOPLE):
+    if not _table_exists(PEOPLE):
         return False
     for foreign_key in _inspector().get_foreign_keys(PEOPLE):
         if (
@@ -99,6 +109,7 @@ def _has_orphan_courses() -> bool:
 def _copy_students() -> None:
     people_columns = _columns(PEOPLE)
     student_columns = _columns(STUDENTS)
+    course_id = _first_column(people_columns, "intcursoid", "numcursoid")
     required_people = {
         "strtipopessoa", "strmatricula", "strnomecompleto", "stremail",
         "strtelefone", "bolativo", "dtacriacao", "dtaatualizacao",
@@ -111,16 +122,18 @@ def _copy_students() -> None:
         return
     if not required_students.issubset(student_columns):
         return
+    course_column = f", {course_id}" if course_id else ""
+    course_value = ", NULL" if course_id else ""
     op.get_bind().execute(
         sa.text(
             f"""
             INSERT INTO {PEOPLE} (
                 strtipopessoa, strmatricula, strnomecompleto, stremail,
-                strtelefone, numcursoid, bolativo, dtacriacao, dtaatualizacao
+                strtelefone{course_column}, bolativo, dtacriacao, dtaatualizacao
             )
             SELECT
                 'ALUNO', student.strmatricula, student.strnomecompleto,
-                student.stremail, student.strtelefone, NULL, student.bolativo,
+                student.stremail, student.strtelefone{course_value}, student.bolativo,
                 student.dtacriacao, student.dtaatualizacao
             FROM {STUDENTS} student
             WHERE NOT EXISTS (
@@ -140,8 +153,7 @@ def _copy_students() -> None:
 
 
 def upgrade() -> None:
-    inspector = _inspector()
-    if not inspector.has_table(PEOPLE):
+    if not _table_exists(PEOPLE):
         op.create_table(
             PEOPLE,
             sa.Column("numpessoaid", sa.Integer(), autoincrement=True, nullable=False),
@@ -190,7 +202,7 @@ def upgrade() -> None:
         )
         columns = _columns(PEOPLE)
 
-    if _inspector().has_table(STUDENTS):
+    if _table_exists(STUDENTS):
         _copy_students()
 
     index_names = _index_names()
@@ -204,7 +216,7 @@ def upgrade() -> None:
 
     if (
         "numcursoid" in columns
-        and _inspector().has_table(DOMAINS)
+        and _table_exists(DOMAINS)
         and "numdominioid" in _columns(DOMAINS)
         and not _course_fk_exists()
         and not _has_orphan_courses()
