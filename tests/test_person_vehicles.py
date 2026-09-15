@@ -4,7 +4,7 @@ from pathlib import Path
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.models.person import Person
@@ -84,14 +84,20 @@ def test_person_vehicle_crud_filters_and_logical_delete(client: TestClient) -> N
 
     response = client.get("/api/v1/person-vehicles", headers=headers)
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()] == [link["id"]]
+    assert link["id"] in [item["id"] for item in response.json()]
     assert client.get(
         "/api/v1/person-vehicles?limit=101", headers=headers
     ).status_code == 422
-    for query in (f"person_id={person_id}", f"vehicle_id={vehicle_id}"):
-        response = client.get(f"/api/v1/person-vehicles?{query}", headers=headers)
-        assert response.status_code == 200
-        assert [item["id"] for item in response.json()] == [link["id"]]
+    response = client.get(
+        f"/api/v1/person-vehicles?person_id={person_id}", headers=headers
+    )
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()] == [link["id"]]
+    response = client.get(
+        f"/api/v1/person-vehicles?vehicle_id={vehicle_id}", headers=headers
+    )
+    assert response.status_code == 200
+    assert link["id"] in [item["id"] for item in response.json()]
 
     response = client.get(f"/api/v1/person-vehicles/{link['id']}", headers=headers)
     assert response.status_code == 200
@@ -178,7 +184,9 @@ def test_many_to_many_and_navigation_endpoints(client: TestClient) -> None:
         f"/api/v1/vehicles/{first_vehicle}/owners", headers=headers
     )
     assert response.status_code == 200
-    assert [person["id"] for person in response.json()] == [first_person, second_person]
+    assert [person["id"] for person in response.json()] == [
+        student_id, first_person, second_person,
+    ]
 
 
 def test_person_vehicle_endpoints_require_authentication(client: TestClient) -> None:
@@ -209,16 +217,31 @@ def test_legacy_vehicle_links_are_copied_idempotently(db_session: Session) -> No
     )
     db_session.add_all([student, person])
     db_session.flush()
-    vehicle = Vehicle(student_id=student.id, plate="PQR6S78")
+    vehicle = Vehicle(plate="PQR6S78")
     db_session.add(vehicle)
+    db_session.commit()
+
+    db_session.execute(
+        text(
+            "ALTER TABLE tblveiculos ADD COLUMN intalunoid INTEGER "
+            "REFERENCES tblalunos(intalunoid)"
+        )
+    )
+    db_session.execute(
+        text(
+            "UPDATE tblveiculos SET intalunoid = :student_id "
+            "WHERE intveiculoid = :vehicle_id"
+        ),
+        {"student_id": student.id, "vehicle_id": vehicle.id},
+    )
     db_session.commit()
 
     migration_path = (
         Path(__file__).parents[1] / "alembic" / "versions"
-        / "0011_create_person_vehicle.py"
+        / "0014_remove_vehicle_student_dependency.py"
     )
     spec = importlib.util.spec_from_file_location(
-        "migration_0011_create_person_vehicle", migration_path
+        "migration_0014_remove_vehicle_student_dependency", migration_path
     )
     assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
@@ -226,8 +249,9 @@ def test_legacy_vehicle_links_are_copied_idempotently(db_session: Session) -> No
     context = MigrationContext.configure(db_session.connection())
     migration.op = Operations(context)
 
-    migration._copy_legacy_links()
-    migration._copy_legacy_links()
+    migration.upgrade()
+    migration.upgrade()
+    db_session.commit()
 
     links = list(
         db_session.scalars(
@@ -239,3 +263,6 @@ def test_legacy_vehicle_links_are_copied_idempotently(db_session: Session) -> No
     )
     assert len(links) == 1
     assert links[0].is_active is True
+    assert "intalunoid" not in {
+        column["name"] for column in inspect(db_session.bind).get_columns("tblveiculos")
+    }

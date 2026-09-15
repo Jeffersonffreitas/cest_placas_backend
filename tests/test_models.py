@@ -28,7 +28,6 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
         },
         "tblveiculos": {
             "intveiculoid",
-            "intalunoid",
             "strplaca",
             "strmarca",
             "strmodelo",
@@ -112,7 +111,9 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
 
     assert models.Student.id.property.columns[0].name == "intalunoid"
     assert models.Student.id.key == "id"
-    assert models.Vehicle.student_id.property.columns[0].name == "intalunoid"
+    assert "intalunoid" not in {
+        column.name for column in models.Vehicle.__table__.columns
+    }
     assert models.PersonVehicle.person_id.property.columns[0].name == "intpessoaid"
     assert models.PersonVehicle.vehicle_id.property.columns[0].name == "intveiculoid"
     assert models.AccessEvent.plate_normalized.property.columns[0].name == "strplacanormalizada"
@@ -122,17 +123,21 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
 def test_main_models_still_persist_with_python_attribute_names(
     db_session: Session,
 ) -> None:
-    student = models.Student(
-        registration_number="MIG-001", full_name="Teste Migration"
+    person = models.Person(
+        person_type="ALUNO",
+        registration_number="MIG-001",
+        full_name="Teste Migration",
     )
-    db_session.add(student)
+    db_session.add(person)
     db_session.flush()
 
-    vehicle = models.Vehicle(student_id=student.id, plate="MIG1A23")
+    vehicle = models.Vehicle(plate="MIG1A23")
     db_session.add(vehicle)
+    db_session.flush()
+    db_session.add(models.PersonVehicle(person_id=person.id, vehicle_id=vehicle.id))
     db_session.commit()
 
     persisted = db_session.get(models.Vehicle, vehicle.id)
     assert persisted is not None
-    assert persisted.student_id == student.id
+    assert persisted.student_id == person.id
     assert persisted.plate == "MIG1A23"

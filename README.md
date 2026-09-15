@@ -15,7 +15,7 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - CRUD administrativo local de alunos em `/api/v1/students`
 - CRUD administrativo local de pessoas em `/api/v1/people`
 - CRUD administrativo local de veiculos em `/api/v1/vehicles`
-- vinculo de 1 aluno para varios veiculos
+- vinculo N:N entre pessoas e veiculos
 - busca de aluno por matricula em `/api/v1/students/by-registration/{registration_number}`
 - busca de veiculo por placa em `/api/v1/vehicles/by-plate/{plate}`
 - leitura manual de placa em `/api/v1/plates/read-manual`
@@ -326,10 +326,12 @@ dados. A integracao com o RM ainda nao foi implementada.
 
 ### Vinculos entre pessoas e veiculos
 
-A tabela `tblpessoaveiculo` implementa a relacao N:N entre pessoas e veiculos.
-Uma pessoa de qualquer tipo aceito pode ter varios veiculos, e um veiculo pode
-estar vinculado a mais de uma pessoa. Vinculos duplicados para o mesmo par sao
-rejeitados e a exclusao e logica, por meio de `bolativo=false`.
+A tabela `tblveiculos` representa somente o veiculo e nao depende diretamente
+de aluno ou pessoa. A tabela `tblpessoaveiculo` implementa a relacao N:N: uma
+pessoa pode ter varios veiculos e um veiculo pode estar vinculado a varias
+pessoas. As pessoas vinculadas podem ser `ALUNO`, `FUNCIONARIO` ou `VISITANTE`.
+Vinculos duplicados para o mesmo par sao rejeitados e a exclusao e logica, por
+meio de `bolativo=false`.
 
 Endpoints protegidos:
 
@@ -343,10 +345,11 @@ GET    /api/v1/vehicles/{vehicle_id}/owners
 ```
 
 A listagem de vinculos aceita `person_id`, `vehicle_id`, `active`, `skip` e
-`limit`. A migration converte os vinculos antigos de `tblveiculos.intalunoid`
-para `tblpessoaveiculo` usando a matricula do aluno. A coluna antiga
-`intalunoid` permanece em `tblveiculos` e continua sendo usada pelos endpoints
-legados, leituras de placa e eventos de acesso nesta fase.
+`limit`. A migration `0014_remove_vehicle_student_dependency` converte, sem
+duplicar, os vinculos antigos de `tblveiculos.intalunoid` para
+`tblpessoaveiculo` usando a matricula do aluno e remove a coluna quando todos os
+vinculos puderem ser preservados. Se houver dado legado sem correspondencia, a
+coluna e mantida temporariamente como nullable, mas o codigo novo nao a utiliza.
 
 ## Veiculos
 
@@ -360,7 +363,22 @@ A placa e normalizada antes de salvar e consultar. Exemplos como `abc-1234`,
 `ABC1234` e `abc 1234` sao tratados como `ABC1234`. Placas invalidas retornam
 erro `invalid_plate` antes do cadastro.
 
-Criar veiculo vinculado a um aluno existente e ativo:
+Criar veiculo sem pessoa vinculada:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/vehicles" `
+  -H "Authorization: Bearer jwt_token" `
+  -H "Content-Type: application/json" `
+  -d '{"plate":"abc-1234","brand":"Fiat","model":"Mobi","color":"Branco"}'
+```
+
+Para criar o vinculo na mesma operacao, envie opcionalmente `person_id`.
+O campo `student_id` continua aceito temporariamente para clientes antigos,
+mas agora tambem cria o vinculo em `tblpessoaveiculo` e nunca e gravado em
+`tblveiculos`. Nas respostas, `student_id` e derivado de um vinculo ativo com
+uma pessoa do tipo `ALUNO`.
+
+Exemplo compativel com um cliente antigo:
 
 ```powershell
 curl -X POST "http://localhost:8000/api/v1/vehicles" `

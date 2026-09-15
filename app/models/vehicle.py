@@ -11,11 +11,6 @@ class Vehicle(Base):
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
     id: Mapped[int] = mapped_column("intveiculoid", primary_key=True, autoincrement=True)
-    student_id: Mapped[int] = mapped_column(
-        "intalunoid",
-        ForeignKey("tblalunos.intalunoid", name="fk_tblveiculos_aluno", ondelete="RESTRICT"),
-        nullable=False,
-    )
     plate: Mapped[str] = mapped_column("strplaca", String(10), nullable=False)
     brand: Mapped[str | None] = mapped_column("strmarca", String(100), nullable=True)
     model: Mapped[str | None] = mapped_column("strmodelo", String(100), nullable=True)
@@ -56,13 +51,25 @@ class Vehicle(Base):
         onupdate=func.now(),
     )
 
-    student = relationship("Student", back_populates="vehicles")
     plate_reads = relationship("PlateRead", back_populates="vehicle")
     access_events = relationship("AccessEvent", back_populates="vehicle")
     brand_domain = relationship("Domain", foreign_keys=[brand_id])
     model_domain = relationship("Domain", foreign_keys=[model_id])
     color_domain = relationship("Domain", foreign_keys=[color_id])
     person_links = relationship("PersonVehicle", back_populates="vehicle")
+
+    @property
+    def student_id(self) -> int | None:
+        """Legacy API field derived from the active person-vehicle links."""
+        student_links = (
+            link
+            for link in self.person_links
+            if link.is_active
+            and link.person is not None
+            and link.person.person_type == "ALUNO"
+        )
+        first_link = min(student_links, key=lambda link: link.id, default=None)
+        return first_link.person_id if first_link is not None else None
 
     @property
     def brand_name(self) -> str | None:
@@ -78,7 +85,6 @@ class Vehicle(Base):
 
 
 Index("ix_tblveiculos_placa", Vehicle.plate, unique=True)
-Index("ix_tblveiculos_aluno", Vehicle.student_id)
 Index("idx_tblveiculos_intmarcaid", Vehicle.brand_id)
 Index("idx_tblveiculos_intmodeloid", Vehicle.model_id)
 Index("idx_tblveiculos_intcorid", Vehicle.color_id)

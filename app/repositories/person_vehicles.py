@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.person import Person
 from app.models.person_vehicle import PersonVehicle
@@ -53,6 +53,12 @@ def list_vehicles_for_person(
 ) -> list[Vehicle]:
     statement = (
         select(Vehicle)
+        .options(
+            selectinload(Vehicle.brand_domain),
+            selectinload(Vehicle.model_domain),
+            selectinload(Vehicle.color_domain),
+            selectinload(Vehicle.person_links).selectinload(PersonVehicle.person),
+        )
         .join(PersonVehicle, PersonVehicle.vehicle_id == Vehicle.id)
         .where(
             PersonVehicle.person_id == person_id,

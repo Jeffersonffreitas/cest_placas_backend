@@ -5,7 +5,7 @@ import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.models.person import Person
@@ -278,3 +278,28 @@ def test_student_copy_is_idempotent_and_preserves_legacy_student(
     assert people[0].person_type == "ALUNO"
     assert people[0].full_name == "Aluno Migrado"
     assert db_session.get(Student, student.id) is not None
+
+
+def test_people_primary_entity_migration_does_not_change_existing_check(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = MigrationContext.configure(db_session.connection())
+    migration_path = (
+        Path(__file__).parents[1] / "alembic" / "versions"
+        / "0013_people_primary_entity.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "migration_0013_people_primary_entity", migration_path
+    )
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    monkeypatch.setattr(migration, "op", Operations(context))
+
+    checks_before = inspect(db_session.connection()).get_check_constraints("tblpessoas")
+
+    migration.upgrade()
+    migration.upgrade()
+
+    checks_after = inspect(db_session.connection()).get_check_constraints("tblpessoas")
+    assert checks_after == checks_before

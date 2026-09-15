@@ -2,13 +2,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
+from app.models.person import Person
+from app.models.person_vehicle import PersonVehicle
 from app.models.vehicle import Vehicle
 from app.models.domain import Domain
+from app.repositories import people as person_repository
+from app.repositories import person_vehicles as link_repository
+from app.repositories import students as student_repository
 from app.repositories import vehicles as vehicle_repository
 from app.repositories import domains as domain_repository
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate
 from app.services.plates import normalize_and_validate_plate
-from app.services.students import get_active_student_or_404
 
 
 VEHICLE_DOMAIN_FIELDS = {
@@ -109,16 +113,86 @@ def _ensure_unique_plate(
         )
 
 
+def _active_person_or_404(db: Session, person_id: int) -> Person:
+    person = person_repository.get_person(db, person_id)
+    if person is None:
+        raise AppException(
+            "Person was not found.", status_code=404, code="person_not_found"
+        )
+    if not person.is_active:
+        raise AppException(
+            "Person is inactive.", status_code=409, code="person_inactive"
+        )
+    return person
+
+
+def _active_student_person_or_404(db: Session, student_id: int) -> Person:
+    student = student_repository.get_student(db, student_id)
+    if student is None:
+        raise AppException(
+            "Student was not found.", status_code=404, code="student_not_found"
+        )
+    if not student.is_active:
+        raise AppException(
+            "Student is inactive.", status_code=409, code="student_inactive"
+        )
+    return student
+
+
+def _requested_people(db: Session, data: dict[str, object]) -> list[Person]:
+    people: list[Person] = []
+    person_id = data.pop("person_id", None)
+    student_id = data.pop("student_id", None)
+    if person_id is not None:
+        people.append(_active_person_or_404(db, int(person_id)))
+    if student_id is not None:
+        student = _active_student_person_or_404(db, int(student_id))
+        if all(person.id != student.id for person in people):
+            people.append(student)
+    return people
+
+
+def _add_links(
+    db: Session, vehicle: Vehicle, people: list[Person], *, reject_existing: bool,
+) -> None:
+    for person in people:
+        existing = link_repository.get_by_pair(
+            db, person_id=person.id, vehicle_id=vehicle.id
+        )
+        if existing is not None:
+            if existing.is_active and reject_existing:
+                raise AppException(
+                    "An active link between this person and vehicle already exists.",
+                    status_code=409,
+                    code="person_vehicle_conflict",
+                )
+            existing.is_active = True
+            continue
+        link = PersonVehicle(person=person, vehicle=vehicle, is_active=True)
+        db.add(link)
+
+
+def _ensure_linkable_vehicle(is_active: bool, has_requested_people: bool) -> None:
+    if has_requested_people and not is_active:
+        raise AppException(
+            "Vehicle is inactive.", status_code=409, code="vehicle_inactive"
+        )
+
+
 def create_vehicle(db: Session, payload: VehicleCreate) -> Vehicle:
     data = payload.model_dump()
-    legacy_student = get_active_student_or_404(db, int(data["student_id"]))
-    data["student_id"] = legacy_student.id
+    people = _requested_people(db, data)
     data["plate"] = normalize_and_validate_plate(str(data["plate"]))
     _ensure_unique_plate(db, str(data["plate"]))
+    _ensure_linkable_vehicle(
+        bool(data.get("is_active", True)), payload.person_id is not None
+    )
     _resolve_vehicle_domains(db, data)
 
     vehicle = vehicle_repository.create_vehicle(db, data)
     try:
+        db.flush()
+        _add_links(db, vehicle, people, reject_existing=False)
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -134,20 +208,24 @@ def create_vehicle(db: Session, payload: VehicleCreate) -> Vehicle:
 def update_vehicle(db: Session, vehicle_id: int, payload: VehicleUpdate) -> Vehicle:
     vehicle = get_vehicle_or_404(db, vehicle_id)
     data = payload.model_dump(exclude_unset=True)
-
-    if "student_id" in data:
-        legacy_student = get_active_student_or_404(db, int(data["student_id"]))
-        data["student_id"] = legacy_student.id
+    people = _requested_people(db, data)
 
     if "plate" in data:
         data["plate"] = normalize_and_validate_plate(str(data["plate"]))
         _ensure_unique_plate(db, str(data["plate"]), current_vehicle_id=vehicle.id)
 
+    _ensure_linkable_vehicle(
+        bool(data.get("is_active", vehicle.is_active)), payload.person_id is not None
+    )
     _resolve_vehicle_domains(db, data)
 
     vehicle_repository.update_vehicle(vehicle, data)
     try:
+        _add_links(db, vehicle, people, reject_existing=True)
         db.commit()
+    except AppException:
+        db.rollback()
+        raise
     except IntegrityError:
         db.rollback()
         raise AppException(

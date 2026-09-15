@@ -36,7 +36,6 @@ class Student(Base):
         onupdate=func.now(),
     )
 
-    vehicles = relationship("Vehicle", back_populates="student")
     access_events = relationship("AccessEvent", back_populates="student")
 
 

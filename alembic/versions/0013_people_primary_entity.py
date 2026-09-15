@@ -1,4 +1,8 @@
-"""Allow visitors and scope active registration uniqueness by person type.
+"""Scope active registration uniqueness by person type.
+
+Person-type validation is intentionally application-managed. This migration
+does not add, replace, or remove CHECK constraints because their names and
+support vary between MySQL and MariaDB installations.
 
 Revision ID: 0013_people_primary_entity
 Revises: 0012_integer_column_prefixes
@@ -7,7 +11,6 @@ Revises: 0012_integer_column_prefixes
 from collections.abc import Sequence
 
 from alembic import op
-import sqlalchemy as sa
 from sqlalchemy import inspect
 
 
@@ -17,10 +20,8 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 PEOPLE = "tblpessoas"
-TYPE_CHECK = "ck_tblpessoas_tipopessoa"
 OLD_UNIQUE = "uq_tblpessoas_strmatriculaativa"
 NEW_UNIQUE = "uq_tblpessoas_tipo_matriculaativa"
-TYPE_EXPRESSION = "strtipopessoa IN ('ALUNO', 'FUNCIONARIO', 'VISITANTE')"
 
 
 def _inspector():
@@ -32,39 +33,12 @@ def _table_exists() -> bool:
     return PEOPLE in inspector.get_table_names() or inspector.has_table(PEOPLE)
 
 
-def _check_constraints() -> dict[str, dict]:
-    return {
-        constraint["name"]: constraint
-        for constraint in _inspector().get_check_constraints(PEOPLE)
-        if constraint.get("name")
-    }
-
-
 def _indexes() -> dict[str, dict]:
     return {
         index["name"]: index
         for index in _inspector().get_indexes(PEOPLE)
         if index.get("name")
     }
-
-
-def _replace_type_check(expression: str) -> None:
-    checks = _check_constraints()
-    current = checks.get(TYPE_CHECK)
-    current_sql = str(current.get("sqltext", "")).upper() if current else ""
-    if expression.upper() in current_sql:
-        return
-
-    if op.get_bind().dialect.name == "sqlite":
-        with op.batch_alter_table(PEOPLE) as batch_op:
-            if current is not None:
-                batch_op.drop_constraint(TYPE_CHECK, type_="check")
-            batch_op.create_check_constraint(TYPE_CHECK, expression)
-        return
-
-    if current is not None:
-        op.drop_constraint(TYPE_CHECK, PEOPLE, type_="check")
-    op.create_check_constraint(TYPE_CHECK, PEOPLE, expression)
 
 
 def _replace_active_registration_index() -> None:
@@ -84,8 +58,6 @@ def upgrade() -> None:
     if not _table_exists():
         return
     columns = {column["name"] for column in _inspector().get_columns(PEOPLE)}
-    if "strtipopessoa" in columns:
-        _replace_type_check(TYPE_EXPRESSION)
     if {"strtipopessoa", "strmatriculaativa"}.issubset(columns):
         _replace_active_registration_index()
 

@@ -1,4 +1,8 @@
 from fastapi.testclient import TestClient
+from sqlalchemy import inspect, select
+from sqlalchemy.orm import Session
+
+from app.models.person_vehicle import PersonVehicle
 
 
 def _admin_headers(client: TestClient) -> dict[str, str]:
@@ -217,3 +221,147 @@ def test_vehicle_update_rejects_inactive_student_target(client: TestClient) -> N
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "student_inactive"
+
+
+def test_vehicle_can_be_created_without_person_or_student(
+    client: TestClient, db_session: Session,
+) -> None:
+    headers = _admin_headers(client)
+    response = client.post(
+        "/api/v1/vehicles", json={"plate": "SEM1D23"}, headers=headers
+    )
+
+    assert response.status_code == 201
+    assert response.json()["student_id"] is None
+    vehicle_id = int(response.json()["id"])
+    assert db_session.scalars(
+        select(PersonVehicle).where(PersonVehicle.vehicle_id == vehicle_id)
+    ).first() is None
+    assert "intalunoid" not in {
+        column["name"] for column in inspect(db_session.bind).get_columns("tblveiculos")
+    }
+
+
+def test_vehicle_person_id_creates_link_and_navigation_works(
+    client: TestClient, db_session: Session,
+) -> None:
+    headers = _admin_headers(client)
+    person_response = client.post(
+        "/api/v1/people",
+        json={
+            "person_type": "FUNCIONARIO",
+            "registration_number": "FUN100",
+            "full_name": "Funcionario Vinculado",
+        },
+        headers=headers,
+    )
+    assert person_response.status_code == 201
+    person_id = int(person_response.json()["id"])
+
+    response = client.post(
+        "/api/v1/vehicles",
+        json={"person_id": person_id, "plate": "FUN1A23"},
+        headers=headers,
+    )
+    assert response.status_code == 201
+    assert response.json()["student_id"] is None
+    vehicle_id = int(response.json()["id"])
+    link = db_session.scalars(
+        select(PersonVehicle).where(
+            PersonVehicle.person_id == person_id,
+            PersonVehicle.vehicle_id == vehicle_id,
+        )
+    ).one()
+    assert link.is_active is True
+
+    owners = client.get(f"/api/v1/vehicles/{vehicle_id}/owners", headers=headers)
+    assert owners.status_code == 200
+    assert [owner["id"] for owner in owners.json()] == [person_id]
+    vehicles = client.get(f"/api/v1/people/{person_id}/vehicles", headers=headers)
+    assert vehicles.status_code == 200
+    assert [vehicle["id"] for vehicle in vehicles.json()] == [vehicle_id]
+
+
+def test_vehicle_student_id_creates_compatibility_link(
+    client: TestClient, db_session: Session,
+) -> None:
+    headers = _admin_headers(client)
+    student = _create_student(client, headers, "20260100", "Aluno Vinculado")
+    response = client.post(
+        "/api/v1/vehicles",
+        json={"student_id": student["id"], "plate": "ALU1A23"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["student_id"] == student["id"]
+    link = db_session.scalars(
+        select(PersonVehicle).where(
+            PersonVehicle.person_id == student["id"],
+            PersonVehicle.vehicle_id == response.json()["id"],
+        )
+    ).one()
+    assert link.is_active is True
+
+
+def test_vehicle_rejects_missing_and_inactive_person(client: TestClient) -> None:
+    headers = _admin_headers(client)
+    missing = client.post(
+        "/api/v1/vehicles",
+        json={"person_id": 999999, "plate": "MIS1A23"},
+        headers=headers,
+    )
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "person_not_found"
+
+    person = client.post(
+        "/api/v1/people",
+        json={
+            "person_type": "VISITANTE",
+            "registration_number": "VIS100",
+            "full_name": "Visitante Inativo",
+        },
+        headers=headers,
+    ).json()
+    assert client.delete(f"/api/v1/people/{person['id']}", headers=headers).status_code == 204
+    inactive = client.post(
+        "/api/v1/vehicles",
+        json={"person_id": person["id"], "plate": "INA1A23"},
+        headers=headers,
+    )
+    assert inactive.status_code == 409
+    assert inactive.json()["error"]["code"] == "person_inactive"
+
+
+def test_vehicle_rejects_missing_student_and_link_to_inactive_vehicle(
+    client: TestClient,
+) -> None:
+    headers = _admin_headers(client)
+    missing_student = client.post(
+        "/api/v1/vehicles",
+        json={"student_id": 999999, "plate": "MIS2A34"},
+        headers=headers,
+    )
+    assert missing_student.status_code == 404
+    assert missing_student.json()["error"]["code"] == "student_not_found"
+
+    person = client.post(
+        "/api/v1/people",
+        json={
+            "person_type": "FUNCIONARIO",
+            "registration_number": "FUN200",
+            "full_name": "Funcionario Ativo",
+        },
+        headers=headers,
+    ).json()
+    inactive_vehicle = client.post(
+        "/api/v1/vehicles",
+        json={
+            "person_id": person["id"],
+            "plate": "INA2A34",
+            "is_active": False,
+        },
+        headers=headers,
+    )
+    assert inactive_vehicle.status_code == 409
+    assert inactive_vehicle.json()["error"]["code"] == "vehicle_inactive"

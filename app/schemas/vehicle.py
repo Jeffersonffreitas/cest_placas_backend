@@ -6,8 +6,9 @@ from app.schemas.common import BaseSchema, ORMBaseSchema
 
 
 class VehicleBase(BaseSchema):
-    student_id: int = Field(gt=0)
     plate: str = Field(min_length=1, max_length=10)
+    person_id: int | None = Field(default=None, gt=0)
+    student_id: int | None = Field(default=None, gt=0)
     brand: str | None = Field(default=None, max_length=100)
     model: str | None = Field(default=None, max_length=100)
     color: str | None = Field(default=None, max_length=50)
@@ -22,6 +23,7 @@ class VehicleCreate(VehicleBase):
 
 
 class VehicleUpdate(BaseSchema):
+    person_id: int | None = Field(default=None, gt=0)
     student_id: int | None = Field(default=None, gt=0)
     plate: str | None = Field(default=None, min_length=1, max_length=10)
     brand: str | None = Field(default=None, max_length=100)
@@ -35,7 +37,7 @@ class VehicleUpdate(BaseSchema):
 
 class VehicleRead(ORMBaseSchema):
     id: int
-    student_id: int
+    student_id: int | None
     plate: str
     brand: str | None
     model: str | None

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.person import Person
 from app.models.student import Student
-from app.models.vehicle import Vehicle
+from app.models.person_vehicle import PersonVehicle
 
 
 def list_students(db: Session, *, skip: int = 0, limit: int = 100) -> list[Person]:
@@ -80,7 +80,10 @@ def deactivate_student(student: Person) -> Person:
 
 
 def count_student_vehicles(db: Session, student_id: int) -> int:
-    statement = select(func.count()).select_from(Vehicle).where(Vehicle.student_id == student_id)
+    statement = select(func.count()).select_from(PersonVehicle).where(
+        PersonVehicle.person_id == student_id,
+        PersonVehicle.is_active.is_(True),
+    )
     return int(db.scalar(statement) or 0)
 
 

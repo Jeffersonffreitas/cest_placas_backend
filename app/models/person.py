@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, Computed, DateTime, ForeignKey, Index, String, func,
+    Boolean, Computed, DateTime, ForeignKey, Index, String, func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,13 +10,7 @@ from app.db.base_class import Base
 
 class Person(Base):
     __tablename__ = "tblpessoas"
-    __table_args__ = (
-        CheckConstraint(
-            "strtipopessoa IN ('ALUNO', 'FUNCIONARIO', 'VISITANTE')",
-            name="ck_tblpessoas_tipopessoa",
-        ),
-        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
-    )
+    __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
 
     id: Mapped[int] = mapped_column("intpessoaid", primary_key=True, autoincrement=True)
     person_type: Mapped[str] = mapped_column("strtipopessoa", String(20), nullable=False)
