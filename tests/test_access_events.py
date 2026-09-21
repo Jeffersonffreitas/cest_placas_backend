@@ -404,6 +404,11 @@ def test_access_events_summary_returns_filtered_totals(
     assert response.status_code == 200
     body = response.json()
     assert body == {
+        "total": 2,
+        "by_status": {"matched": 1, "not_found": 1},
+        "by_origin": {"upload": 2},
+        "by_action": {"NAO_INFORMADO": 2},
+        "by_person_type": {"NAO_RESOLVIDA": 2},
         "total_events": 2,
         "total_matched": 1,
         "total_not_found": 1,

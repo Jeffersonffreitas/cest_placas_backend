@@ -35,6 +35,22 @@ def get_by_pair(
     return db.scalars(statement).first()
 
 
+def get_first_active_person_for_vehicle(
+    db: Session, vehicle_id: int,
+) -> Person | None:
+    statement = (
+        select(Person)
+        .join(PersonVehicle, PersonVehicle.person_id == Person.id)
+        .where(
+            PersonVehicle.vehicle_id == vehicle_id,
+            PersonVehicle.is_active.is_(True),
+            Person.is_active.is_(True),
+        )
+        .order_by(PersonVehicle.id, Person.id)
+    )
+    return db.scalars(statement).first()
+
+
 def create_person_vehicle(
     db: Session, data: dict[str, object],
 ) -> PersonVehicle:

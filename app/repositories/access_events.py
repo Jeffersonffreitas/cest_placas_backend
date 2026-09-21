@@ -1,36 +1,40 @@
 from datetime import datetime
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from app.models.access_event import AccessEvent
-
-
-ACCESS_EVENT_STATUSES = ("matched", "not_found")
-ACCESS_EVENT_SOURCES = ("manual", "upload")
+from app.models.domain import Domain
+from app.models.person import Person
 
 
 def _apply_access_event_filters(
     statement,
     *,
     plate_normalized: str | None = None,
-    source: str | None = None,
+    origin: str | None = None,
     status: str | None = None,
-    student_id: int | None = None,
+    person_id: int | None = None,
     vehicle_id: int | None = None,
+    action_id: int | None = None,
+    origin_id: int | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ):
     if plate_normalized is not None:
         statement = statement.where(AccessEvent.plate_normalized == plate_normalized)
-    if source is not None:
-        statement = statement.where(AccessEvent.source == source)
+    if origin is not None:
+        statement = statement.where(AccessEvent.origin == origin)
     if status is not None:
         statement = statement.where(AccessEvent.status == status)
-    if student_id is not None:
-        statement = statement.where(AccessEvent.student_id == student_id)
+    if person_id is not None:
+        statement = statement.where(AccessEvent.person_id == person_id)
     if vehicle_id is not None:
         statement = statement.where(AccessEvent.vehicle_id == vehicle_id)
+    if action_id is not None:
+        statement = statement.where(AccessEvent.action_id == action_id)
+    if origin_id is not None:
+        statement = statement.where(AccessEvent.origin_id == origin_id)
     if date_from is not None:
         statement = statement.where(AccessEvent.created_at >= date_from)
     if date_to is not None:
@@ -38,88 +42,99 @@ def _apply_access_event_filters(
     return statement
 
 
-def list_access_events(
-    db: Session,
-    *,
-    skip: int = 0,
-    limit: int = 100,
-    plate_normalized: str | None = None,
-    source: str | None = None,
-    status: str | None = None,
-    student_id: int | None = None,
-    vehicle_id: int | None = None,
-    date_from: datetime | None = None,
-    date_to: datetime | None = None,
-) -> list[AccessEvent]:
-    statement = select(AccessEvent).options(
-        joinedload(AccessEvent.student),
+def _load_options():
+    return (
         joinedload(AccessEvent.vehicle),
+        joinedload(AccessEvent.person),
+        joinedload(AccessEvent.plate_read),
+        joinedload(AccessEvent.action),
+        joinedload(AccessEvent.origin_domain),
     )
+
+
+def list_access_events(db: Session, *, skip: int = 0, limit: int = 100, **filters) -> list[AccessEvent]:
     statement = _apply_access_event_filters(
-        statement,
-        plate_normalized=plate_normalized,
-        source=source,
-        status=status,
-        student_id=student_id,
-        vehicle_id=vehicle_id,
-        date_from=date_from,
-        date_to=date_to,
+        select(AccessEvent).options(*_load_options()), **filters
     )
-    statement = (
-        statement.order_by(AccessEvent.created_at.desc(), AccessEvent.id.desc())
-        .offset(skip)
-        .limit(limit)
-    )
+    statement = statement.order_by(
+        AccessEvent.created_at.desc(), AccessEvent.id.desc()
+    ).offset(skip).limit(limit)
     return list(db.scalars(statement).all())
 
 
-def summarize_access_events(
-    db: Session,
-    *,
-    source: str | None = None,
-    status: str | None = None,
-    date_from: datetime | None = None,
-    date_to: datetime | None = None,
-) -> dict[str, object]:
-    total_statement = _apply_access_event_filters(
-        select(func.count(AccessEvent.id)),
-        source=source,
-        status=status,
-        date_from=date_from,
-        date_to=date_to,
+def get_access_event(db: Session, access_event_id: int) -> AccessEvent | None:
+    statement = select(AccessEvent).where(AccessEvent.id == access_event_id).options(
+        *_load_options()
     )
-    total_events = int(db.scalar(total_statement) or 0)
+    return db.scalars(statement).first()
 
-    status_statement = _apply_access_event_filters(
-        select(AccessEvent.status, func.count(AccessEvent.id)).group_by(AccessEvent.status),
-        source=source,
-        status=status,
-        date_from=date_from,
-        date_to=date_to,
-    )
-    total_by_status = {status_key: 0 for status_key in ACCESS_EVENT_STATUSES}
-    total_by_status.update(
-        {row_status: int(total) for row_status, total in db.execute(status_statement).all()},
-    )
 
-    source_statement = _apply_access_event_filters(
-        select(AccessEvent.source, func.count(AccessEvent.id)).group_by(AccessEvent.source),
-        source=source,
-        status=status,
-        date_from=date_from,
-        date_to=date_to,
-    )
-    total_by_source = {source_key: 0 for source_key in ACCESS_EVENT_SOURCES}
-    total_by_source.update(
-        {row_source: int(total) for row_source, total in db.execute(source_statement).all()},
-    )
-
+def _count_map(db: Session, statement) -> dict[str, int]:
     return {
-        "total_events": total_events,
-        "total_matched": total_by_status["matched"],
-        "total_not_found": total_by_status["not_found"],
-        "total_manual": total_by_source["manual"],
-        "total_upload": total_by_source["upload"],
+        str(key) if key is not None else "NAO_INFORMADO": int(total)
+        for key, total in db.execute(statement).all()
+    }
+
+
+def summarize_access_events(db: Session, **filters) -> dict[str, object]:
+    total = int(db.scalar(_apply_access_event_filters(
+        select(func.count(AccessEvent.id)), **filters
+    )) or 0)
+    by_status = _count_map(db, _apply_access_event_filters(
+        select(AccessEvent.status, func.count(AccessEvent.id)).group_by(AccessEvent.status),
+        **filters,
+    ))
+    origin_domain = aliased(Domain)
+    origin_key = func.coalesce(
+        origin_domain.code, origin_domain.name, AccessEvent.origin, "NAO_INFORMADO"
+    )
+    origin_statement = (
+        select(origin_key, func.count(AccessEvent.id))
+        .select_from(AccessEvent)
+        .outerjoin(origin_domain, origin_domain.id == AccessEvent.origin_id)
+        .group_by(
+            origin_domain.code,
+            origin_domain.name,
+            AccessEvent.origin,
+        )
+    )
+    by_origin = _count_map(
+        db, _apply_access_event_filters(origin_statement, **filters)
+    )
+
+    action_domain = aliased(Domain)
+    action_statement = (
+        select(
+            func.coalesce(action_domain.code, action_domain.name, "NAO_INFORMADO"),
+            func.count(AccessEvent.id),
+        )
+        .select_from(AccessEvent)
+        .outerjoin(action_domain, action_domain.id == AccessEvent.action_id)
+        .group_by(action_domain.code, action_domain.name)
+    )
+    by_action = _count_map(db, _apply_access_event_filters(action_statement, **filters))
+
+    person_statement = (
+        select(func.coalesce(Person.person_type, "NAO_RESOLVIDA"), func.count(AccessEvent.id))
+        .select_from(AccessEvent)
+        .outerjoin(Person, Person.id == AccessEvent.person_id)
+        .group_by(Person.person_type)
+    )
+    by_person_type = _count_map(db, _apply_access_event_filters(person_statement, **filters))
+
+    total_by_status = {"matched": 0, "not_found": 0, **by_status}
+    total_by_source = {"manual": 0, "upload": 0, **by_origin}
+    return {
+        "total": total,
+        "by_status": by_status,
+        "by_origin": by_origin,
+        "by_action": by_action,
+        "by_person_type": by_person_type,
+        "total_events": total,
+        "total_matched": total_by_status.get("matched", 0),
+        "total_not_found": total_by_status.get("not_found", 0),
+        "total_manual": total_by_source.get("manual", 0),
+        "total_upload": total_by_source.get("upload", 0),
         "total_by_status": total_by_status,
         "total_by_source": total_by_source,
     }

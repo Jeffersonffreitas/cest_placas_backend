@@ -84,7 +84,7 @@ def test_image_plate_read_with_mock_plate_matches_vehicle_and_registers_records(
     assert body["plate_input"] == "abc-1d23"
     assert body["plate_normalized"] == "ABC1D23"
     assert body["source"] == "upload"
-    assert body["status"] == "matched"
+    assert body["status"] == "ACESSO_LIBERADO"
     assert body["operational_decision"] == "ACESSO_LIBERADO"
     assert body["vehicle"]["id"] == vehicle["id"]
     assert body["student"]["id"] == student["id"]
@@ -96,7 +96,7 @@ def test_image_plate_read_with_mock_plate_matches_vehicle_and_registers_records(
     assert access_event.plate_input == "abc-1d23"
     assert access_event.plate_normalized == "ABC1D23"
     assert access_event.source == "upload"
-    assert access_event.status == "matched"
+    assert access_event.status == "ACESSO_LIBERADO"
     assert access_event.vehicle_id == vehicle["id"]
     assert access_event.student_id == student["id"]
 
@@ -134,7 +134,7 @@ def test_image_plate_read_uses_ocr_when_mock_plate_is_missing_and_registers_not_
     assert body["plate_input"] == "ZZZ9Z99"
     assert body["plate_normalized"] == "ZZZ9Z99"
     assert body["source"] == "upload"
-    assert body["status"] == "not_found"
+    assert body["status"] == "VEICULO_NAO_CADASTRADO"
     assert body["operational_decision"] == "VEICULO_NAO_CADASTRADO"
     assert body["vehicle"] is None
     assert body["student"] is None
@@ -146,7 +146,7 @@ def test_image_plate_read_uses_ocr_when_mock_plate_is_missing_and_registers_not_
     assert access_event.plate_input == "ZZZ9Z99"
     assert access_event.plate_normalized == "ZZZ9Z99"
     assert access_event.source == "upload"
-    assert access_event.status == "not_found"
+    assert access_event.status == "VEICULO_NAO_CADASTRADO"
     assert access_event.vehicle_id is None
     assert access_event.student_id is None
 
@@ -197,14 +197,14 @@ def test_image_plate_read_with_sufficient_ocr_confidence_matches_vehicle(
     body = response.json()
     assert body["plate_input"] == "ZZZ9Z99"
     assert body["plate_normalized"] == "ZZZ9Z99"
-    assert body["status"] == "matched"
+    assert body["status"] == "ACESSO_LIBERADO"
     assert body["operational_decision"] == "ACESSO_LIBERADO"
     assert body["vehicle"]["id"] == vehicle["id"]
     assert body["student"]["id"] == student["id"]
     assert body["confidence"] == 70.0
 
     access_event = db_session.scalars(select(AccessEvent)).one()
-    assert access_event.status == "matched"
+    assert access_event.status == "ACESSO_LIBERADO"
     assert access_event.vehicle_id == vehicle["id"]
     assert access_event.student_id == student["id"]
 
@@ -253,7 +253,7 @@ def test_image_plate_read_with_low_ocr_confidence_registers_safe_not_found(
     assert body["plate_input"] == "LOW1A23"
     assert body["plate_normalized"] == "LOW1A23"
     assert body["source"] == "upload"
-    assert body["status"] == "not_found"
+    assert body["status"] == "OCR_BAIXA_CONFIANCA"
     assert body["operational_decision"] == "OCR_BAIXA_CONFIANCA"
     assert body["vehicle"] is None
     assert body["student"] is None
@@ -262,7 +262,7 @@ def test_image_plate_read_with_low_ocr_confidence_registers_safe_not_found(
     access_event = db_session.scalars(select(AccessEvent)).one()
     assert access_event.plate_normalized == "LOW1A23"
     assert access_event.source == "upload"
-    assert access_event.status == "not_found"
+    assert access_event.status == "OCR_BAIXA_CONFIANCA"
     assert access_event.vehicle_id is None
     assert access_event.student_id is None
 

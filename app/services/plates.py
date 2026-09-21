@@ -14,7 +14,9 @@ from app.core.exceptions import AppException
 from app.integrations.ocr import extract_plate_from_image
 from app.models.access_event import AccessEvent
 from app.repositories import access_events as access_event_repository
+from app.repositories import domains as domain_repository
 from app.repositories import plate_reads as plate_read_repository
+from app.repositories import person_vehicles as person_vehicle_repository
 from app.repositories import vehicles as vehicle_repository
 from app.schemas.plate import ManualPlateReadRequest, OperationalDecision
 
@@ -53,13 +55,18 @@ def normalize_and_validate_plate(plate: str) -> str:
 
 
 def operational_decision_for_access_event(access_event: AccessEvent) -> OperationalDecision:
-    vehicle = access_event.vehicle
-    student = access_event.student
-    if vehicle is None or student is None:
+    if access_event.status in {
+        "ACESSO_LIBERADO",
+        "VEICULO_NAO_CADASTRADO",
+        "PESSOA_NAO_VINCULADA",
+        "OCR_BAIXA_CONFIANCA",
+    }:
+        return access_event.status
+    if access_event.vehicle is None:
         return "VEICULO_NAO_CADASTRADO"
-    if vehicle.is_active and student.is_active:
-        return "ACESSO_LIBERADO"
-    return "CADASTRO_INATIVO"
+    if access_event.person is None:
+        return "PESSOA_NAO_VINCULADA"
+    return "ACESSO_LIBERADO"
 
 
 def _ocr_error_details(details: object | None) -> dict[str, object]:
@@ -68,24 +75,43 @@ def _ocr_error_details(details: object | None) -> dict[str, object]:
     return {"operational_decision": OPERATIONAL_DECISION_OCR_ERROR}
 
 
-def _create_access_event_for_plate(db: Session, plate_input: str, plate_normalized: str, source: str) -> AccessEvent:
-    vehicle = vehicle_repository.get_vehicle_by_plate(db, plate_normalized)
+def _create_access_event_for_plate(
+    db: Session,
+    plate_input: str,
+    plate_normalized: str,
+    source: str,
+    *,
+    plate_read_id: int | None = None,
+) -> AccessEvent:
+    vehicle = vehicle_repository.get_active_vehicle_by_plate(db, plate_normalized)
+    person = (
+        person_vehicle_repository.get_first_active_person_for_vehicle(db, vehicle.id)
+        if vehicle is not None
+        else None
+    )
+    action = domain_repository.get_active_by_type_and_code(
+        db, type="ACAO_ACESSO", code="ENTRADA"
+    )
+    origin_domain = domain_repository.get_active_by_type_and_code(
+        db,
+        type="ORIGEM_ACESSO",
+        code="TESTE_MANUAL" if source == "manual" else "UPLOAD_IMAGEM",
+    )
 
     event_data: dict[str, object] = {
         "plate_input": plate_input,
         "plate_normalized": plate_normalized,
-        "source": source,
-        "status": "not_found",
-        "vehicle_id": None,
-        "student_id": None,
+        "origin": source,
+        "status": "VEICULO_NAO_CADASTRADO",
+        "vehicle_id": vehicle.id if vehicle is not None else None,
+        "person_id": person.id if person is not None else None,
+        "plate_read_id": plate_read_id,
+        "action_id": action.id if action is not None else None,
+        "origin_id": origin_domain.id if origin_domain is not None else None,
     }
     if vehicle is not None:
-        event_data.update(
-            {
-                "status": "matched",
-                "vehicle_id": vehicle.id,
-                "student_id": vehicle.student_id,
-            },
+        event_data["status"] = (
+            "ACESSO_LIBERADO" if person is not None else "PESSOA_NAO_VINCULADA"
         )
 
     return access_event_repository.create_access_event(db, event_data)
@@ -96,16 +122,27 @@ def _create_unmatched_access_event_for_plate(
     plate_input: str,
     plate_normalized: str,
     source: str,
+    *,
+    plate_read_id: int | None = None,
 ) -> AccessEvent:
+    action = domain_repository.get_active_by_type_and_code(
+        db, type="ACAO_ACESSO", code="TENTATIVA"
+    )
+    origin_domain = domain_repository.get_active_by_type_and_code(
+        db, type="ORIGEM_ACESSO", code="UPLOAD_IMAGEM"
+    )
     return access_event_repository.create_access_event(
         db,
         {
             "plate_input": plate_input,
             "plate_normalized": plate_normalized,
-            "source": source,
-            "status": "not_found",
+            "origin": source,
+            "status": "OCR_BAIXA_CONFIANCA",
             "vehicle_id": None,
-            "student_id": None,
+            "person_id": None,
+            "plate_read_id": plate_read_id,
+            "action_id": action.id if action is not None else None,
+            "origin_id": origin_domain.id if origin_domain is not None else None,
         },
     )
 
@@ -163,9 +200,9 @@ def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = Non
         confidence_is_sufficient = _is_ocr_confidence_sufficient(confidence)
 
     plate_normalized = normalize_and_validate_plate(plate_input)
-    vehicle = vehicle_repository.get_vehicle_by_plate(db, plate_normalized) if confidence_is_sufficient else None
+    vehicle = vehicle_repository.get_active_vehicle_by_plate(db, plate_normalized) if confidence_is_sufficient else None
 
-    plate_read_repository.create_plate_read(
+    plate_read = plate_read_repository.create_plate_read(
         db,
         {
             "vehicle_id": vehicle.id if vehicle is not None else None,
@@ -176,10 +213,15 @@ def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = Non
             "read_at": datetime.now(UTC).replace(tzinfo=None),
         },
     )
+    db.flush()
     if confidence_is_sufficient:
-        access_event = _create_access_event_for_plate(db, plate_input, plate_normalized, "upload")
+        access_event = _create_access_event_for_plate(
+            db, plate_input, plate_normalized, "upload", plate_read_id=plate_read.id
+        )
     else:
-        access_event = _create_unmatched_access_event_for_plate(db, plate_input, plate_normalized, "upload")
+        access_event = _create_unmatched_access_event_for_plate(
+            db, plate_input, plate_normalized, "upload", plate_read_id=plate_read.id
+        )
     db.commit()
     db.refresh(access_event)
     operational_decision = (

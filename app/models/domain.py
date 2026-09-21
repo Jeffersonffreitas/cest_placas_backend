@@ -33,8 +33,6 @@ class Domain(Base):
         "Domain", remote_side=[id], back_populates="children"
     )
     children: Mapped[list["Domain"]] = relationship("Domain", back_populates="parent")
-
-
 Index("ix_tbldominios_tipo", Domain.type)
 Index("ix_tbldominios_ativo", Domain.is_active)
 Index("ix_tbldominios_pai", Domain.parent_id)

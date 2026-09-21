@@ -36,9 +36,6 @@ class Student(Base):
         onupdate=func.now(),
     )
 
-    access_events = relationship("AccessEvent", back_populates="student")
-
-
 Index("ix_tblalunos_matricula", Student.registration_number, unique=True)
 Index("ix_tblalunos_email", Student.email, unique=True)
 

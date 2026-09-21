@@ -11,6 +11,7 @@ from app.schemas.plate import (
     ManualPlateReadResponse,
 )
 from app.schemas.student import StudentRead
+from app.schemas.person import PersonRead
 from app.schemas.vehicle import VehicleRead
 from app.services import plates as plate_service
 
@@ -39,6 +40,7 @@ def read_manual_plate(
         status=access_event.status,
         operational_decision=plate_service.operational_decision_for_access_event(access_event),
         vehicle=VehicleRead.model_validate(access_event.vehicle) if access_event.vehicle else None,
+        person=PersonRead.model_validate(access_event.person) if access_event.person else None,
         student=StudentRead.model_validate(access_event.student) if access_event.student else None,
         created_at=access_event.created_at,
     )
@@ -67,6 +69,7 @@ def read_image_plate(
         status=access_event.status,
         operational_decision=result.operational_decision,
         vehicle=VehicleRead.model_validate(access_event.vehicle) if access_event.vehicle else None,
+        person=PersonRead.model_validate(access_event.person) if access_event.person else None,
         student=StudentRead.model_validate(access_event.student) if access_event.student else None,
         image_path=result.image_path,
         confidence=result.confidence,

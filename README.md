@@ -682,8 +682,28 @@ curl "http://localhost:8000/api/v1/access-events" `
   -H "Authorization: Bearer jwt_token"
 ```
 
-A listagem retorna a placa informada, a placa normalizada, origem, status,
-data de criacao e, quando existirem, os dados do veiculo e do aluno vinculados.
+A placa e a entrada da decisao operacional. O backend normaliza a placa, resolve
+um veiculo ativo em `tblveiculos` e procura uma pessoa ativa por um vinculo ativo
+em `tblpessoaveiculo`. O evento guarda `vehicle_id`, `person_id` e o status
+resultante. Essa resolucao funciona da mesma forma para `ALUNO`, `FUNCIONARIO` e
+`VISITANTE` e nao consulta `tblalunos`.
+
+Acao e origem estruturadas referenciam `tbldominios`, respectivamente pelos
+tipos `ACAO_ACESSO` e `ORIGEM_ACESSO`. O campo textual `origin`/`source`
+(`strorigem`) foi mantido temporariamente para clientes legados.
+
+Criar manualmente um evento:
+
+```powershell
+curl -Method Post "http://localhost:8000/api/v1/access-events" `
+  -Headers @{ Authorization = "Bearer jwt_token" } `
+  -ContentType "application/json" `
+  -Body '{"plate":"ABC1D23","action_id":1,"origin_id":2}'
+```
+
+Status produzidos pela resolucao: `ACESSO_LIBERADO`,
+`VEICULO_NAO_CADASTRADO`, `PESSOA_NAO_VINCULADA`,
+`OCR_BAIXA_CONFIANCA` e `PLACA_INVALIDA`.
 
 Parametros aceitos na listagem:
 
@@ -692,9 +712,12 @@ skip=0
 limit=100
 plate=ABC1D23
 source=manual
-status=matched
-student_id=1
+origin=PORTAO_PRINCIPAL
+status=ACESSO_LIBERADO
+person_id=1
 vehicle_id=1
+action_id=1
+origin_id=2
 date_from=2026-05-12T00:00:00
 date_to=2026-05-12T23:59:59
 ```
@@ -705,15 +728,15 @@ Validacoes:
 limit minimo: 1
 limit maximo: 100
 plate: placa brasileira valida, normalizada antes da busca
-source: manual ou upload
-status: matched ou not_found
+source/origin: origem textual legada ou codigo da origem estruturada
+status: uma situacao operacional valida (valores legados continuam consultaveis)
 date_from: deve ser menor ou igual a date_to quando ambos forem enviados
 ```
 
 Exemplo combinando filtros:
 
 ```powershell
-curl "http://localhost:8000/api/v1/access-events?plate=abc-1d23&status=matched&skip=0&limit=20" `
+curl "http://localhost:8000/api/v1/access-events?plate=abc-1d23&status=ACESSO_LIBERADO&skip=0&limit=20" `
   -H "Authorization: Bearer jwt_token"
 ```
 
@@ -731,7 +754,11 @@ Filtros aceitos no resumo:
 
 ```text
 source=manual
-status=matched
+status=ACESSO_LIBERADO
+person_id=1
+vehicle_id=1
+action_id=1
+origin_id=2
 date_from=2026-05-12T00:00:00
 date_to=2026-05-12T23:59:59
 ```
@@ -740,6 +767,11 @@ Exemplo de resposta do resumo:
 
 ```json
 {
+  "total": 10,
+  "by_status": {"ACESSO_LIBERADO": 7, "VEICULO_NAO_CADASTRADO": 3},
+  "by_origin": {"PORTAO_PRINCIPAL": 6, "GUARITA": 4},
+  "by_action": {"ENTRADA": 7, "TENTATIVA": 3},
+  "by_person_type": {"ALUNO": 5, "FUNCIONARIO": 2, "NAO_RESOLVIDA": 3},
   "total_events": 10,
   "total_matched": 7,
   "total_not_found": 3,
@@ -761,6 +793,10 @@ Exemplo de resposta do resumo:
 ```
 
 Quando `date_from` e `date_to` nao forem enviados, `period` retorna `null`.
+
+Consultar um evento especifico usa
+`GET /api/v1/access-events/{access_event_id}`. A integracao com RM ainda nao foi
+implementada nesta fase.
 
 ## Rodar testes
 
@@ -792,6 +828,12 @@ Tipos iniciais de dominio:
 - `ACAO_ACESSO`
 - `CURSO`
 - `COORDENACAO`
+
+A migration `0015_access_events_person_domains` cadastra defensivamente:
+
+- `ACAO_ACESSO`: `ENTRADA`, `SAIDA`, `TENTATIVA`, `LIBERACAO_MANUAL`, `BLOQUEIO`
+- `ORIGEM_ACESSO`: `PORTAO_PRINCIPAL`, `PORTAO_FUNDOS`, `GUARITA`,
+  `TESTE_MANUAL`, `UPLOAD_IMAGEM`
 
 As rotas administrativas protegidas estao em `/api/v1/domains`. A listagem
 aceita os filtros `tipo`, `ativo`, `parent_id`, `skip` e `limit` (de 1 a 100).

@@ -6,12 +6,14 @@ from pydantic import Field
 from app.schemas.access_event import AccessEventStatus
 from app.schemas.common import BaseSchema
 from app.schemas.student import StudentRead
+from app.schemas.person import PersonRead
 from app.schemas.vehicle import VehicleRead
 
 
 OperationalDecision = Literal[
     "ACESSO_LIBERADO",
     "VEICULO_NAO_CADASTRADO",
+    "PESSOA_NAO_VINCULADA",
     "OCR_BAIXA_CONFIANCA",
     "PLACA_INVALIDA",
     "ERRO_OCR",
@@ -31,6 +33,7 @@ class ManualPlateReadResponse(BaseSchema):
     status: AccessEventStatus
     operational_decision: OperationalDecision
     vehicle: VehicleRead | None
+    person: PersonRead | None
     student: StudentRead | None
     created_at: datetime
 

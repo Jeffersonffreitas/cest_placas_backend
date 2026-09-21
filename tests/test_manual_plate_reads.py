@@ -60,7 +60,7 @@ def test_manual_plate_read_matches_vehicle_and_registers_access_event(
     assert body["plate_input"] == "abc-1d23"
     assert body["plate_normalized"] == "ABC1D23"
     assert body["source"] == "manual"
-    assert body["status"] == "matched"
+    assert body["status"] == "ACESSO_LIBERADO"
     assert body["operational_decision"] == "ACESSO_LIBERADO"
     assert body["vehicle"]["id"] == vehicle["id"]
     assert body["student"]["id"] == student["id"]
@@ -70,7 +70,7 @@ def test_manual_plate_read_matches_vehicle_and_registers_access_event(
     assert access_event.plate_normalized == "ABC1D23"
     assert access_event.vehicle_id == vehicle["id"]
     assert access_event.student_id == student["id"]
-    assert access_event.status == "matched"
+    assert access_event.status == "ACESSO_LIBERADO"
 
 
 def test_manual_plate_read_not_found_registers_access_event(
@@ -89,7 +89,7 @@ def test_manual_plate_read_not_found_registers_access_event(
     body = response.json()
     assert body["plate_input"] == "zzz-9z99"
     assert body["plate_normalized"] == "ZZZ9Z99"
-    assert body["status"] == "not_found"
+    assert body["status"] == "VEICULO_NAO_CADASTRADO"
     assert body["operational_decision"] == "VEICULO_NAO_CADASTRADO"
     assert body["vehicle"] is None
     assert body["student"] is None
@@ -100,7 +100,7 @@ def test_manual_plate_read_not_found_registers_access_event(
     assert access_event.vehicle_id is None
     assert access_event.student_id is None
     assert access_event.source == "manual"
-    assert access_event.status == "not_found"
+    assert access_event.status == "VEICULO_NAO_CADASTRADO"
 
 
 def test_manual_plate_read_requires_admin(client: TestClient) -> None:
@@ -109,7 +109,7 @@ def test_manual_plate_read_requires_admin(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_manual_plate_read_with_inactive_vehicle_returns_inactive_decision(
+def test_manual_plate_read_with_inactive_vehicle_is_not_resolved(
     client: TestClient,
 ) -> None:
     headers = _admin_headers(client)
@@ -137,10 +137,10 @@ def test_manual_plate_read_with_inactive_vehicle_returns_inactive_decision(
 
     assert response.status_code == 201
     body = response.json()
-    assert body["status"] == "matched"
-    assert body["operational_decision"] == "CADASTRO_INATIVO"
-    assert body["vehicle"]["is_active"] is False
-    assert body["student"]["is_active"] is True
+    assert body["status"] == "VEICULO_NAO_CADASTRADO"
+    assert body["operational_decision"] == "VEICULO_NAO_CADASTRADO"
+    assert body["vehicle"] is None
+    assert body["person"] is None
 
 
 def test_manual_plate_read_rejects_invalid_plate(client: TestClient) -> None:

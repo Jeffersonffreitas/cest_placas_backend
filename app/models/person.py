@@ -44,6 +44,7 @@ class Person(Base):
 
     course = relationship("Domain", foreign_keys=[course_id])
     vehicle_links = relationship("PersonVehicle", back_populates="person")
+    access_events = relationship("AccessEvent", back_populates="person")
 
 
 Index("idx_tblpessoas_strtipopessoa", Person.person_type)

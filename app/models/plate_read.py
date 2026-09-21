@@ -43,6 +43,7 @@ class PlateRead(Base):
     )
 
     vehicle = relationship("Vehicle", back_populates="plate_reads")
+    access_events = relationship("AccessEvent", back_populates="plate_read")
 
 
 Index("ix_tblleiturasplacas_placa", PlateRead.plate)
