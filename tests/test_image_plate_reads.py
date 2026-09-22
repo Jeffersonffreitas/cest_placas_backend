@@ -86,6 +86,8 @@ def test_image_plate_read_with_mock_plate_matches_vehicle_and_registers_records(
     assert body["source"] == "upload"
     assert body["status"] == "ACESSO_LIBERADO"
     assert body["operational_decision"] == "ACESSO_LIBERADO"
+    assert body["access_event_id"] == body["id"]
+    assert isinstance(body["plate_read_id"], int)
     assert body["vehicle"]["id"] == vehicle["id"]
     assert body["student"]["id"] == student["id"]
     assert body["image_path"].startswith(upload_dir.as_posix())
@@ -302,13 +304,18 @@ def test_image_plate_read_with_ocr_error_returns_operational_decision(
     body = response.json()
     assert body["error"]["code"] == "plate_not_recognized"
     assert body["error"]["details"]["operational_decision"] == "ERRO_OCR"
-    assert db_session.scalars(select(AccessEvent)).all() == []
-    assert db_session.scalars(select(PlateRead)).all() == []
+    access_event = db_session.scalars(select(AccessEvent)).one()
+    plate_read = db_session.scalars(select(PlateRead)).one()
+    assert access_event.status == "ERRO_OCR"
+    assert access_event.plate_read_id == plate_read.id
+    assert response.json()["error"]["details"]["access_event_id"] == access_event.id
+    assert response.json()["error"]["details"]["plate_read_id"] == plate_read.id
     assert len(list(upload_dir.iterdir())) == 1
 
 
 def test_image_plate_read_with_invalid_mock_plate_returns_invalid_plate_decision(
     client: TestClient,
+    db_session: Session,
     upload_dir: Path,
 ) -> None:
     headers = _admin_headers(client)
@@ -324,6 +331,10 @@ def test_image_plate_read_with_invalid_mock_plate_returns_invalid_plate_decision
     body = response.json()
     assert body["error"]["code"] == "invalid_plate"
     assert body["error"]["details"]["operational_decision"] == "PLACA_INVALIDA"
+    access_event = db_session.scalars(select(AccessEvent)).one()
+    plate_read = db_session.scalars(select(PlateRead)).one()
+    assert access_event.status == "PLACA_INVALIDA"
+    assert access_event.plate_read_id == plate_read.id
     assert len(list(upload_dir.iterdir())) == 1
 
 

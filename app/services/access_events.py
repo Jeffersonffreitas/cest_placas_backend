@@ -9,6 +9,7 @@ from app.models.domain import Domain
 from app.models.person import Person
 from app.models.plate_read import PlateRead
 from app.repositories import access_events as access_event_repository
+from app.repositories import domains as domain_repository
 from app.repositories import person_vehicles as person_vehicle_repository
 from app.repositories import vehicles as vehicle_repository
 from app.schemas.access_event import (
@@ -17,7 +18,7 @@ from app.schemas.access_event import (
     AccessEventSummaryPeriod,
     AccessEventSummaryRead,
 )
-from app.services.plates import normalize_and_validate_plate
+from app.services.plate_utils import normalize_and_validate_plate
 
 
 def _validate_date_range(date_from: datetime | None, date_to: datetime | None) -> None:
@@ -52,6 +53,50 @@ def _resolved_access_data(db: Session, plate_normalized: str) -> tuple[object | 
     if person is None:
         return vehicle, None, "PESSOA_NAO_VINCULADA"
     return vehicle, person, "ACESSO_LIBERADO"
+
+
+def create_access_event_from_plate_read(
+    db: Session,
+    *,
+    plate_input: str,
+    plate_normalized: str,
+    origin: str,
+    plate_read_id: int,
+    status_override: AccessEventStatus | None = None,
+) -> AccessEvent:
+    """Create the event paired with a manual or image plate read.
+
+    Domain lookup is best-effort so an installation without the optional
+    ACAO_ACESSO/ORIGEM_ACESSO rows can still register the access attempt.
+    """
+    vehicle = None
+    person = None
+    resolved_status: AccessEventStatus = status_override or "VEICULO_NAO_CADASTRADO"
+    if status_override is None:
+        vehicle, person, resolved_status = _resolved_access_data(db, plate_normalized)
+
+    action_code = "ENTRADA" if resolved_status == "ACESSO_LIBERADO" else "TENTATIVA"
+    origin_code = "TESTE_MANUAL" if origin == "manual" else "UPLOAD_IMAGEM"
+    action = domain_repository.get_active_by_type_and_code(
+        db, type="ACAO_ACESSO", code=action_code
+    )
+    origin_domain = domain_repository.get_active_by_type_and_code(
+        db, type="ORIGEM_ACESSO", code=origin_code
+    )
+    return access_event_repository.create_access_event(
+        db,
+        {
+            "vehicle_id": vehicle.id if vehicle is not None else None,
+            "person_id": person.id if person is not None else None,
+            "plate_read_id": plate_read_id,
+            "action_id": action.id if action is not None else None,
+            "origin_id": origin_domain.id if origin_domain is not None else None,
+            "status": resolved_status,
+            "plate_input": plate_input[:20],
+            "plate_normalized": plate_normalized[:10],
+            "origin": origin,
+        },
+    )
 
 
 def create_resolved_access_event(

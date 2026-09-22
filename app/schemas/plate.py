@@ -27,6 +27,8 @@ class ManualPlateReadRequest(BaseSchema):
 
 class ManualPlateReadResponse(BaseSchema):
     id: int
+    access_event_id: int
+    plate_read_id: int
     plate_input: str
     plate_normalized: str
     source: str

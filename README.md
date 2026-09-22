@@ -471,17 +471,19 @@ curl -X POST "http://localhost:8000/api/v1/plates/read-manual" `
   -d '{"plate":"ABC1D23"}'
 ```
 
-Quando a placa normalizada for encontrada em veiculos, a resposta retorna
-`status` como `matched`, alem dos dados do veiculo e do aluno. Quando nao houver
-veiculo cadastrado, a resposta retorna `status` como `not_found` e registra o
-evento de acesso mesmo assim.
+Toda leitura manual registra uma linha em `tblleiturasplacas` e gera um evento
+relacionado em `tbleventosacesso`. A resposta preserva `id` como identificador
+do evento e tambem informa `access_event_id` e `plate_read_id`. A placa
+normalizada resolve um veiculo ativo em `tblveiculos` e depois uma pessoa ativa
+por um vinculo ativo em `tblpessoaveiculo`.
 
 As respostas de leitura tambem retornam `operational_decision`, pensado para o
 uso na portaria:
 
 ```text
-ACESSO_LIBERADO       placa encontrada com veiculo e aluno ativos
+ACESSO_LIBERADO       placa encontrada com veiculo e pessoa vinculada ativos
 VEICULO_NAO_CADASTRADO placa valida, mas sem cadastro de veiculo
+PESSOA_NAO_VINCULADA  veiculo ativo sem pessoa vinculada ativa
 OCR_BAIXA_CONFIANCA   OCR real abaixo da confianca minima
 CADASTRO_INATIVO      placa encontrada, mas veiculo ou aluno inativo
 ```
@@ -498,10 +500,12 @@ Exemplo de resposta com veiculo encontrado:
 ```json
 {
   "id": 1,
+  "access_event_id": 1,
+  "plate_read_id": 1,
   "plate_input": "ABC1D23",
   "plate_normalized": "ABC1D23",
   "source": "manual",
-  "status": "matched",
+  "status": "ACESSO_LIBERADO",
   "operational_decision": "ACESSO_LIBERADO",
   "vehicle": {
     "id": 1,
@@ -533,10 +537,12 @@ Exemplo sem veiculo cadastrado:
 ```json
 {
   "id": 2,
+  "access_event_id": 2,
+  "plate_read_id": 2,
   "plate_input": "ZZZ9Z99",
   "plate_normalized": "ZZZ9Z99",
   "source": "manual",
-  "status": "not_found",
+  "status": "VEICULO_NAO_CADASTRADO",
   "operational_decision": "VEICULO_NAO_CADASTRADO",
   "vehicle": null,
   "student": null,
@@ -579,14 +585,16 @@ com confianca alta.
 Para o OCR real, a API exige confianca minima de `70.0` em uma escala de 0 a
 100. Leituras com confianca ausente ou abaixo desse valor continuam sendo
 registradas em `tblleiturasplacas` e geram evento em `tbleventosacesso`, mas sao
-tratadas de forma segura como `status` igual a `not_found`, sem vincular
-veiculo ou aluno. Quando `mock_plate` for enviado, essa regra de confianca nao
+tratadas de forma segura como `status` igual a `OCR_BAIXA_CONFIANCA`, sem vincular
+veiculo ou pessoa. Quando `mock_plate` for enviado, essa regra de confianca nao
 e aplicada, preservando o fluxo de testes e simulacoes.
 
 A leitura salva a imagem em `uploads/plate_reads/`, registra uma linha em
 `tblleiturasplacas` com JSON publico `image_path`, `source` igual a `upload` e
-`confidence` quando o OCR fornecer essa informacao. Depois registra normalmente
-um evento de acesso com `source` igual a `upload`.
+`confidence` quando o OCR fornecer essa informacao. Depois cria um evento com
+`plate_read_id`, veiculo e pessoa quando aplicavel. Falha de OCR e placa invalida
+mantem o erro HTTP compativel, mas tambem registram leitura e evento para
+auditoria; os IDs aparecem em `error.details`.
 
 Sem `mock_plate`, o ambiente precisa ter o Tesseract OCR instalado, alem das
 dependencias Python instaladas por `requirements.txt`. No Windows, a integracao
@@ -600,10 +608,12 @@ Exemplo de resposta:
 ```json
 {
   "id": 2,
+  "access_event_id": 2,
+  "plate_read_id": 2,
   "plate_input": "ABC1D23",
   "plate_normalized": "ABC1D23",
   "source": "upload",
-  "status": "matched",
+  "status": "ACESSO_LIBERADO",
   "operational_decision": "ACESSO_LIBERADO",
   "vehicle": {
     "id": 1,
@@ -637,10 +647,12 @@ Exemplo com OCR abaixo da confianca minima:
 ```json
 {
   "id": 3,
+  "access_event_id": 3,
+  "plate_read_id": 3,
   "plate_input": "ABC1D23",
   "plate_normalized": "ABC1D23",
   "source": "upload",
-  "status": "not_found",
+  "status": "OCR_BAIXA_CONFIANCA",
   "operational_decision": "OCR_BAIXA_CONFIANCA",
   "vehicle": null,
   "student": null,
@@ -659,7 +671,9 @@ Exemplo de erro quando o OCR nao reconhece uma placa:
     "code": "plate_not_recognized",
     "message": "Could not identify a Brazilian plate in the image.",
     "details": {
-      "operational_decision": "ERRO_OCR"
+      "operational_decision": "ERRO_OCR",
+      "access_event_id": 4,
+      "plate_read_id": 4
     }
   },
   "path": "/api/v1/plates/read-image",
@@ -692,6 +706,17 @@ Acao e origem estruturadas referenciam `tbldominios`, respectivamente pelos
 tipos `ACAO_ACESSO` e `ORIGEM_ACESSO`. O campo textual `origin`/`source`
 (`strorigem`) foi mantido temporariamente para clientes legados.
 
+Eventos produzidos por `/plates/read-manual` e `/plates/read-image` possuem
+`plate_read_id`. A listagem e o detalhe retornam `plate_read` quando disponivel,
+alem de `vehicle` e `person`, e o resumo contabiliza normalmente esses eventos.
+Os dominios `ENTRADA` ou `TENTATIVA` (`ACAO_ACESSO`) e `TESTE_MANUAL` ou
+`UPLOAD_IMAGEM` (`ORIGEM_ACESSO`) sao usados quando estiverem ativos; sua
+ausencia nao interrompe o fluxo.
+
+Esta fase ainda nao integra com o RM e nao depende de `tblalunos`. Tambem nao
+existe identificacao real de camera frontal ou traseira; a origem representa
+somente o fluxo manual ou o upload da imagem.
+
 Criar manualmente um evento:
 
 ```powershell
@@ -703,7 +728,7 @@ curl -Method Post "http://localhost:8000/api/v1/access-events" `
 
 Status produzidos pela resolucao: `ACESSO_LIBERADO`,
 `VEICULO_NAO_CADASTRADO`, `PESSOA_NAO_VINCULADA`,
-`OCR_BAIXA_CONFIANCA` e `PLACA_INVALIDA`.
+`OCR_BAIXA_CONFIANCA`, `PLACA_INVALIDA` e `ERRO_OCR`.
 
 Parametros aceitos na listagem:
 

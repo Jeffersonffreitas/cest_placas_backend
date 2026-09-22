@@ -122,8 +122,15 @@ def summarize_access_events(db: Session, **filters) -> dict[str, object]:
     )
     by_person_type = _count_map(db, _apply_access_event_filters(person_statement, **filters))
 
+    textual_source_statement = (
+        select(AccessEvent.origin, func.count(AccessEvent.id))
+        .group_by(AccessEvent.origin)
+    )
+    textual_sources = _count_map(
+        db, _apply_access_event_filters(textual_source_statement, **filters)
+    )
     total_by_status = {"matched": 0, "not_found": 0, **by_status}
-    total_by_source = {"manual": 0, "upload": 0, **by_origin}
+    total_by_source = {"manual": 0, "upload": 0, **textual_sources}
     return {
         "total": total,
         "by_status": by_status,

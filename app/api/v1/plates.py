@@ -34,6 +34,8 @@ def read_manual_plate(
     access_event = plate_service.read_manual_plate(db, payload)
     return ManualPlateReadResponse(
         id=access_event.id,
+        access_event_id=access_event.id,
+        plate_read_id=access_event.plate_read_id,
         plate_input=access_event.plate_input,
         plate_normalized=access_event.plate_normalized,
         source=access_event.source,
@@ -63,6 +65,8 @@ def read_image_plate(
     access_event = result.access_event
     return ImagePlateReadResponse(
         id=access_event.id,
+        access_event_id=access_event.id,
+        plate_read_id=access_event.plate_read_id,
         plate_input=access_event.plate_input,
         plate_normalized=access_event.plate_normalized,
         source=access_event.source,

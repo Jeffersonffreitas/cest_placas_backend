@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.access_event import AccessEvent
+from app.models.plate_read import PlateRead
 
 
 def _admin_headers(client: TestClient) -> dict[str, str]:
@@ -62,6 +63,8 @@ def test_manual_plate_read_matches_vehicle_and_registers_access_event(
     assert body["source"] == "manual"
     assert body["status"] == "ACESSO_LIBERADO"
     assert body["operational_decision"] == "ACESSO_LIBERADO"
+    assert body["access_event_id"] == body["id"]
+    assert isinstance(body["plate_read_id"], int)
     assert body["vehicle"]["id"] == vehicle["id"]
     assert body["student"]["id"] == student["id"]
 
@@ -71,6 +74,10 @@ def test_manual_plate_read_matches_vehicle_and_registers_access_event(
     assert access_event.vehicle_id == vehicle["id"]
     assert access_event.student_id == student["id"]
     assert access_event.status == "ACESSO_LIBERADO"
+    plate_read = db_session.scalars(select(PlateRead)).one()
+    assert access_event.plate_read_id == plate_read.id
+    assert plate_read.vehicle_id == vehicle["id"]
+    assert plate_read.source == "manual"
 
 
 def test_manual_plate_read_not_found_registers_access_event(
@@ -143,7 +150,9 @@ def test_manual_plate_read_with_inactive_vehicle_is_not_resolved(
     assert body["person"] is None
 
 
-def test_manual_plate_read_rejects_invalid_plate(client: TestClient) -> None:
+def test_manual_plate_read_rejects_invalid_plate(
+    client: TestClient, db_session: Session
+) -> None:
     headers = _admin_headers(client)
 
     response = client.post(
@@ -155,3 +164,8 @@ def test_manual_plate_read_rejects_invalid_plate(client: TestClient) -> None:
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "invalid_plate"
     assert response.json()["error"]["details"]["operational_decision"] == "PLACA_INVALIDA"
+    details = response.json()["error"]["details"]
+    event = db_session.get(AccessEvent, details["access_event_id"])
+    plate_read = db_session.get(PlateRead, details["plate_read_id"])
+    assert event is not None and event.status == "PLACA_INVALIDA"
+    assert plate_read is not None and event.plate_read_id == plate_read.id

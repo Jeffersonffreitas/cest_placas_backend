@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -15,6 +16,7 @@ AccessEventStatus = Literal[
     "PESSOA_NAO_VINCULADA",
     "OCR_BAIXA_CONFIANCA",
     "PLACA_INVALIDA",
+    "ERRO_OCR",
     "matched",
     "not_found",
 ]
@@ -37,6 +39,18 @@ class AccessEventCreate(BaseSchema):
         return value.strip().lower() if value is not None else None
 
 
+class PlateReadRead(ORMBaseSchema):
+    id: int
+    vehicle_id: int | None
+    plate: str
+    source: str
+    confidence: Decimal | None
+    image_path: str | None
+    read_at: datetime
+    created_at: datetime
+    updated_at: datetime
+
+
 class AccessEventRead(ORMBaseSchema):
     id: int
     vehicle_id: int | None
@@ -53,6 +67,7 @@ class AccessEventRead(ORMBaseSchema):
     vehicle: VehicleRead | None
     person: PersonRead | None
     student: StudentRead | None
+    plate_read: PlateReadRead | None
 
 
 class AccessEventListItem(AccessEventRead):

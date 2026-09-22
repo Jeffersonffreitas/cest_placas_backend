@@ -12,7 +12,7 @@ from app.repositories import students as student_repository
 from app.repositories import vehicles as vehicle_repository
 from app.repositories import domains as domain_repository
 from app.schemas.vehicle import VehicleCreate, VehicleUpdate
-from app.services.plates import normalize_and_validate_plate
+from app.services.plate_utils import normalize_and_validate_plate
 
 
 VEHICLE_DOMAIN_FIELDS = {
