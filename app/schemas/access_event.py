@@ -17,6 +17,7 @@ AccessEventStatus = Literal[
     "OCR_BAIXA_CONFIANCA",
     "PLACA_INVALIDA",
     "ERRO_OCR",
+    "CADASTRO_INATIVO",
     "matched",
     "not_found",
 ]

@@ -86,9 +86,15 @@ def test_image_plate_read_with_mock_plate_matches_vehicle_and_registers_records(
     assert body["source"] == "upload"
     assert body["status"] == "ACESSO_LIBERADO"
     assert body["operational_decision"] == "ACESSO_LIBERADO"
+    assert body["success"] is True
+    assert body["message"] == "Acesso liberado."
     assert body["access_event_id"] == body["id"]
     assert isinstance(body["plate_read_id"], int)
+    assert body["access_event"]["id"] == body["access_event_id"]
     assert body["vehicle"]["id"] == vehicle["id"]
+    assert body["person"]["id"] == student["id"]
+    assert body["person_type"] == "ALUNO"
+    assert body["origin"] == "upload"
     assert body["student"]["id"] == student["id"]
     assert body["image_path"].startswith(upload_dir.as_posix())
     assert body["confidence"] is None
@@ -108,6 +114,15 @@ def test_image_plate_read_with_mock_plate_matches_vehicle_and_registers_records(
     assert plate_read.vehicle_id == vehicle["id"]
     assert plate_read.image_path == body["image_path"]
     assert plate_read.confidence is None
+
+    listing = client.get("/api/v1/access-events", headers=headers)
+    assert listing.status_code == 200
+    assert listing.json()[0]["id"] == body["access_event_id"]
+    assert listing.json()[0]["plate_read_id"] == body["plate_read_id"]
+    summary = client.get("/api/v1/access-events/summary", headers=headers)
+    assert summary.status_code == 200
+    assert summary.json()["total"] == 1
+    assert summary.json()["by_status"] == {"ACESSO_LIBERADO": 1}
 
 
 def test_image_plate_read_uses_ocr_when_mock_plate_is_missing_and_registers_not_found(
@@ -257,6 +272,9 @@ def test_image_plate_read_with_low_ocr_confidence_registers_safe_not_found(
     assert body["source"] == "upload"
     assert body["status"] == "OCR_BAIXA_CONFIANCA"
     assert body["operational_decision"] == "OCR_BAIXA_CONFIANCA"
+    assert body["success"] is True
+    assert body["message"] == "Leitura OCR com baixa confianca."
+    assert body["access_event"]["id"] == body["access_event_id"]
     assert body["vehicle"] is None
     assert body["student"] is None
     assert body["confidence"] == 69.99
@@ -304,6 +322,16 @@ def test_image_plate_read_with_ocr_error_returns_operational_decision(
     body = response.json()
     assert body["error"]["code"] == "plate_not_recognized"
     assert body["error"]["details"]["operational_decision"] == "ERRO_OCR"
+    assert (
+        body["error"]["details"]["message"]
+        == "Nao foi possivel realizar a leitura OCR."
+    )
+    assert body["error"]["details"]["source"] == "upload"
+    assert body["error"]["details"]["origin"] == "upload"
+    assert (
+        body["error"]["details"]["access_event"]["id"]
+        == body["error"]["details"]["access_event_id"]
+    )
     access_event = db_session.scalars(select(AccessEvent)).one()
     plate_read = db_session.scalars(select(PlateRead)).one()
     assert access_event.status == "ERRO_OCR"

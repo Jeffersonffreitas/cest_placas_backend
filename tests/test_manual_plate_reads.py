@@ -63,9 +63,16 @@ def test_manual_plate_read_matches_vehicle_and_registers_access_event(
     assert body["source"] == "manual"
     assert body["status"] == "ACESSO_LIBERADO"
     assert body["operational_decision"] == "ACESSO_LIBERADO"
+    assert body["success"] is True
+    assert body["message"] == "Acesso liberado."
     assert body["access_event_id"] == body["id"]
     assert isinstance(body["plate_read_id"], int)
+    assert body["confidence"] is None
+    assert body["access_event"]["id"] == body["access_event_id"]
     assert body["vehicle"]["id"] == vehicle["id"]
+    assert body["person"]["id"] == student["id"]
+    assert body["person_type"] == "ALUNO"
+    assert body["origin"] == "manual"
     assert body["student"]["id"] == student["id"]
 
     access_event = db_session.scalars(select(AccessEvent)).one()
@@ -98,7 +105,11 @@ def test_manual_plate_read_not_found_registers_access_event(
     assert body["plate_normalized"] == "ZZZ9Z99"
     assert body["status"] == "VEICULO_NAO_CADASTRADO"
     assert body["operational_decision"] == "VEICULO_NAO_CADASTRADO"
+    assert body["success"] is True
+    assert body["access_event"]["id"] == body["access_event_id"]
     assert body["vehicle"] is None
+    assert body["person"] is None
+    assert body["person_type"] is None
     assert body["student"] is None
 
     access_event = db_session.scalars(select(AccessEvent)).one()
@@ -116,7 +127,7 @@ def test_manual_plate_read_requires_admin(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_manual_plate_read_with_inactive_vehicle_is_not_resolved(
+def test_manual_plate_read_with_inactive_vehicle_returns_inactive_decision(
     client: TestClient,
 ) -> None:
     headers = _admin_headers(client)
@@ -144,10 +155,59 @@ def test_manual_plate_read_with_inactive_vehicle_is_not_resolved(
 
     assert response.status_code == 201
     body = response.json()
-    assert body["status"] == "VEICULO_NAO_CADASTRADO"
-    assert body["operational_decision"] == "VEICULO_NAO_CADASTRADO"
-    assert body["vehicle"] is None
-    assert body["person"] is None
+    assert body["status"] == "CADASTRO_INATIVO"
+    assert body["operational_decision"] == "CADASTRO_INATIVO"
+    assert body["vehicle"]["is_active"] is False
+    assert body["person"]["id"] == student["id"]
+    assert body["person_type"] == "ALUNO"
+
+
+def test_manual_plate_read_with_inactive_person_returns_inactive_decision(
+    client: TestClient,
+) -> None:
+    headers = _admin_headers(client)
+    person_response = client.post(
+        "/api/v1/people",
+        json={
+            "person_type": "FUNCIONARIO",
+            "registration_number": "FUNC-INATIVO-01",
+            "full_name": "Funcionario Inativo",
+        },
+        headers=headers,
+    )
+    assert person_response.status_code == 201
+    person = person_response.json()
+    vehicle_response = client.post(
+        "/api/v1/vehicles",
+        json={"plate": "INA1T23", "brand": "Fiat", "model": "Uno"},
+        headers=headers,
+    )
+    assert vehicle_response.status_code == 201
+    vehicle = vehicle_response.json()
+    link_response = client.post(
+        "/api/v1/person-vehicles",
+        json={"person_id": person["id"], "vehicle_id": vehicle["id"]},
+        headers=headers,
+    )
+    assert link_response.status_code == 201
+    deactivate_response = client.delete(
+        f"/api/v1/people/{person['id']}", headers=headers
+    )
+    assert deactivate_response.status_code == 204
+
+    response = client.post(
+        "/api/v1/plates/read-manual",
+        json={"plate": "INA1T23"},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["operational_decision"] == "CADASTRO_INATIVO"
+    assert body["vehicle"]["id"] == vehicle["id"]
+    assert body["person"]["id"] == person["id"]
+    assert body["person"]["is_active"] is False
+    assert body["person_type"] == "FUNCIONARIO"
 
 
 def test_manual_plate_read_rejects_invalid_plate(
@@ -165,6 +225,12 @@ def test_manual_plate_read_rejects_invalid_plate(
     assert response.json()["error"]["code"] == "invalid_plate"
     assert response.json()["error"]["details"]["operational_decision"] == "PLACA_INVALIDA"
     details = response.json()["error"]["details"]
+    assert details["message"] == "Placa invalida."
+    assert details["plate_input"] == "ABC"
+    assert details["plate_normalized"] == "ABC"
+    assert details["source"] == "manual"
+    assert details["confidence"] is None
+    assert details["origin"] == "manual"
     event = db_session.get(AccessEvent, details["access_event_id"])
     plate_read = db_session.get(PlateRead, details["plate_read_id"])
     assert event is not None and event.status == "PLACA_INVALIDA"

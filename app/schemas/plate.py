@@ -3,10 +3,10 @@ from typing import Literal
 
 from pydantic import Field
 
-from app.schemas.access_event import AccessEventStatus
+from app.schemas.access_event import AccessEventRead, AccessEventStatus
 from app.schemas.common import BaseSchema
+from app.schemas.person import PersonRead, PersonType
 from app.schemas.student import StudentRead
-from app.schemas.person import PersonRead
 from app.schemas.vehicle import VehicleRead
 
 
@@ -26,20 +26,26 @@ class ManualPlateReadRequest(BaseSchema):
 
 
 class ManualPlateReadResponse(BaseSchema):
+    success: Literal[True] = True
+    message: str
     id: int
     access_event_id: int
     plate_read_id: int
     plate_input: str
     plate_normalized: str
     source: str
+    confidence: float | None = None
     status: AccessEventStatus
     operational_decision: OperationalDecision
+    access_event: AccessEventRead
     vehicle: VehicleRead | None
     person: PersonRead | None
+    person_type: PersonType | None
+    action: str | None
+    origin: str | None
     student: StudentRead | None
     created_at: datetime
 
 
 class ImagePlateReadResponse(ManualPlateReadResponse):
     image_path: str
-    confidence: float | None

@@ -473,9 +473,25 @@ curl -X POST "http://localhost:8000/api/v1/plates/read-manual" `
 
 Toda leitura manual registra uma linha em `tblleiturasplacas` e gera um evento
 relacionado em `tbleventosacesso`. A resposta preserva `id` como identificador
-do evento e tambem informa `access_event_id` e `plate_read_id`. A placa
-normalizada resolve um veiculo ativo em `tblveiculos` e depois uma pessoa ativa
-por um vinculo ativo em `tblpessoaveiculo`.
+legado do evento e agora apresenta um retorno operacional padronizado:
+
+- `success` e `message` informam o resultado de forma direta ao operador;
+- `operational_decision` contem a decisao operacional normalizada;
+- `plate_read_id` identifica a leitura persistida em `tblleiturasplacas`;
+- `access_event_id` liga a leitura ao evento correspondente em
+  `tbleventosacesso`;
+- `access_event` traz os dados persistidos do evento criado;
+- `vehicle`, `person` e `person_type` aparecem quando os cadastros forem
+  encontrados;
+- `action` e `origin` usam os codigos dos dominios associados quando eles
+  estiverem cadastrados;
+- `confidence` e `source` fazem parte do mesmo contrato nas leituras manual e
+  por imagem. Na leitura manual, `confidence` e `null`.
+
+A placa normalizada resolve o veiculo em `tblveiculos` e depois uma pessoa por
+um vinculo ativo em `tblpessoaveiculo`. O fluxo usa `tblpessoas` para os tipos
+`ALUNO`, `FUNCIONARIO` e `VISITANTE`; ele nao depende de `tblalunos` nem de
+`intalunoid` em `tblveiculos`.
 
 As respostas de leitura tambem retornam `operational_decision`, pensado para o
 uso na portaria:
@@ -485,28 +501,45 @@ ACESSO_LIBERADO       placa encontrada com veiculo e pessoa vinculada ativos
 VEICULO_NAO_CADASTRADO placa valida, mas sem cadastro de veiculo
 PESSOA_NAO_VINCULADA  veiculo ativo sem pessoa vinculada ativa
 OCR_BAIXA_CONFIANCA   OCR real abaixo da confianca minima
-CADASTRO_INATIVO      placa encontrada, mas veiculo ou aluno inativo
+CADASTRO_INATIVO      placa encontrada, mas veiculo ou pessoa inativa
 ```
 
-Em erros de leitura, a decisao aparece em `error.details.operational_decision`:
+Em erros de leitura, o codigo HTTP e o envelope de erro permanecem compativeis.
+Os dados operacionais disponiveis aparecem em `error.details`, incluindo
+`operational_decision`, `access_event_id`, `plate_read_id`, placa, origem e data:
 
 ```text
 PLACA_INVALIDA formato de placa invalido
 ERRO_OCR       OCR indisponivel, imagem invalida ou placa nao reconhecida
 ```
 
-Exemplo de resposta com veiculo encontrado:
+Trecho de resposta com veiculo encontrado (os objetos aninhados foram
+abreviados para facilitar a leitura):
 
 ```json
 {
+  "success": true,
+  "message": "Acesso liberado.",
   "id": 1,
   "access_event_id": 1,
   "plate_read_id": 1,
   "plate_input": "ABC1D23",
   "plate_normalized": "ABC1D23",
   "source": "manual",
+  "confidence": null,
   "status": "ACESSO_LIBERADO",
   "operational_decision": "ACESSO_LIBERADO",
+  "access_event": {
+    "id": 1,
+    "vehicle_id": 1,
+    "person_id": 1,
+    "plate_read_id": 1,
+    "status": "ACESSO_LIBERADO",
+    "plate_input": "ABC1D23",
+    "plate_normalized": "ABC1D23",
+    "origin": "manual",
+    "source": "manual"
+  },
   "vehicle": {
     "id": 1,
     "student_id": 1,
@@ -518,8 +551,9 @@ Exemplo de resposta com veiculo encontrado:
     "created_at": "2026-05-12T15:30:00",
     "updated_at": "2026-05-12T15:30:00"
   },
-  "student": {
+  "person": {
     "id": 1,
+    "person_type": "ALUNO",
     "registration_number": "20260001",
     "full_name": "Maria Silva",
     "email": "maria.silva@example.com",
@@ -528,11 +562,17 @@ Exemplo de resposta com veiculo encontrado:
     "created_at": "2026-05-12T15:30:00",
     "updated_at": "2026-05-12T15:30:00"
   },
+  "person_type": "ALUNO",
+  "action": "ENTRADA",
+  "origin": "TESTE_MANUAL",
   "created_at": "2026-05-12T15:30:00"
 }
 ```
 
-Exemplo sem veiculo cadastrado:
+O campo legado `student` continua presente para consumidores antigos quando a
+pessoa resolvida for do tipo `ALUNO`.
+
+Trecho da resposta sem veiculo cadastrado:
 
 ```json
 {
@@ -596,6 +636,11 @@ A leitura salva a imagem em `uploads/plate_reads/`, registra uma linha em
 mantem o erro HTTP compativel, mas tambem registram leitura e evento para
 auditoria; os IDs aparecem em `error.details`.
 
+O upload usa o mesmo contrato operacional da leitura manual. Alem dos campos
+comuns, retorna `image_path` e a confianca produzida pelo OCR. Assim,
+`plate_read_id` sempre identifica a leitura registrada e `access_event_id`
+identifica o evento criado quando o processamento chega a essa etapa.
+
 Sem `mock_plate`, o ambiente precisa ter o Tesseract OCR instalado, alem das
 dependencias Python instaladas por `requirements.txt`. No Windows, a integracao
 procura automaticamente o executavel em
@@ -603,7 +648,7 @@ procura automaticamente o executavel em
 `C:\Program Files\Tesseract-OCR\tesseract.exe`, e por fim usa o Tesseract
 disponivel no PATH.
 
-Exemplo de resposta:
+Trecho da resposta:
 
 ```json
 {
@@ -642,7 +687,7 @@ Exemplo de resposta:
 }
 ```
 
-Exemplo com OCR abaixo da confianca minima:
+Trecho da resposta com OCR abaixo da confianca minima:
 
 ```json
 {

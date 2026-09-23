@@ -51,6 +51,22 @@ def get_first_active_person_for_vehicle(
     return db.scalars(statement).first()
 
 
+def get_first_person_with_active_link_for_vehicle(
+    db: Session, vehicle_id: int,
+) -> Person | None:
+    """Return a linked person even when its own registration is inactive."""
+    statement = (
+        select(Person)
+        .join(PersonVehicle, PersonVehicle.person_id == Person.id)
+        .where(
+            PersonVehicle.vehicle_id == vehicle_id,
+            PersonVehicle.is_active.is_(True),
+        )
+        .order_by(PersonVehicle.id, Person.id)
+    )
+    return db.scalars(statement).first()
+
+
 def create_person_vehicle(
     db: Session, data: dict[str, object],
 ) -> PersonVehicle:

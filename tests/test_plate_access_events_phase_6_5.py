@@ -71,8 +71,15 @@ def test_manual_read_links_plate_read_vehicle_person_domains_and_queries(
     assert response.status_code == 201
     body = response.json()
     assert body["status"] == "ACESSO_LIBERADO"
+    assert body["success"] is True
+    assert body["message"] == "Acesso liberado."
+    assert body["operational_decision"] == "ACESSO_LIBERADO"
     assert body["vehicle"]["id"] == vehicle["id"]
     assert body["person"]["id"] == person["id"]
+    assert body["person_type"] == "FUNCIONARIO"
+    assert body["action"] == "ENTRADA"
+    assert body["origin"] == "TESTE_MANUAL"
+    assert body["access_event"]["id"] == body["access_event_id"]
     event = db_session.get(AccessEvent, body["access_event_id"])
     plate_read = db_session.get(PlateRead, body["plate_read_id"])
     assert event is not None and plate_read is not None
@@ -110,6 +117,7 @@ def test_manual_read_registered_vehicle_without_person_creates_denied_event(
     assert response.status_code == 201
     body = response.json()
     assert body["status"] == "PESSOA_NAO_VINCULADA"
+    assert body["operational_decision"] == "PESSOA_NAO_VINCULADA"
     assert body["vehicle"]["id"] == vehicle["id"]
     assert body["person"] is None
     assert isinstance(body["plate_read_id"], int)

@@ -46,13 +46,25 @@ def _validate_domain(
 
 
 def _resolved_access_data(db: Session, plate_normalized: str) -> tuple[object | None, Person | None, str]:
-    vehicle = vehicle_repository.get_active_vehicle_by_plate(db, plate_normalized)
+    vehicle = vehicle_repository.get_vehicle_by_plate(db, plate_normalized)
     if vehicle is None:
         return None, None, "VEICULO_NAO_CADASTRADO"
-    person = person_vehicle_repository.get_first_active_person_for_vehicle(db, vehicle.id)
+    active_person = person_vehicle_repository.get_first_active_person_for_vehicle(
+        db, vehicle.id
+    )
+    person = (
+        active_person
+        or person_vehicle_repository.get_first_person_with_active_link_for_vehicle(
+            db, vehicle.id
+        )
+    )
+    if not vehicle.is_active:
+        return vehicle, person, "CADASTRO_INATIVO"
+    if active_person is not None:
+        return vehicle, active_person, "ACESSO_LIBERADO"
     if person is None:
         return vehicle, None, "PESSOA_NAO_VINCULADA"
-    return vehicle, person, "ACESSO_LIBERADO"
+    return vehicle, person, "CADASTRO_INATIVO"
 
 
 def create_access_event_from_plate_read(
