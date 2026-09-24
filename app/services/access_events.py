@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -15,9 +15,11 @@ from app.repositories import vehicles as vehicle_repository
 from app.schemas.access_event import (
     AccessEventCreate,
     AccessEventStatus,
+    AccessEventStatsRead,
     AccessEventSummaryPeriod,
     AccessEventSummaryRead,
 )
+from app.schemas.person import PersonType
 from app.services.plate_utils import normalize_and_validate_plate
 
 
@@ -207,6 +209,7 @@ def list_access_events(
     origin: str | None = None,
     status: AccessEventStatus | None = None,
     person_id: int | None = None,
+    person_type: PersonType | None = None,
     vehicle_id: int | None = None,
     action_id: int | None = None,
     origin_id: int | None = None,
@@ -223,6 +226,7 @@ def list_access_events(
         origin=origin,
         status=status,
         person_id=person_id,
+        person_type=person_type,
         vehicle_id=vehicle_id,
         action_id=action_id,
         origin_id=origin_id,
@@ -234,9 +238,11 @@ def list_access_events(
 def summarize_access_events(
     db: Session,
     *,
+    plate: str | None = None,
     origin: str | None = None,
     status: AccessEventStatus | None = None,
     person_id: int | None = None,
+    person_type: PersonType | None = None,
     vehicle_id: int | None = None,
     action_id: int | None = None,
     origin_id: int | None = None,
@@ -244,11 +250,14 @@ def summarize_access_events(
     date_to: datetime | None = None,
 ) -> AccessEventSummaryRead:
     _validate_date_range(date_from, date_to)
+    plate_normalized = normalize_and_validate_plate(plate) if plate is not None else None
     summary_data = access_event_repository.summarize_access_events(
         db,
+        plate_normalized=plate_normalized,
         origin=origin,
         status=status,
         person_id=person_id,
+        person_type=person_type,
         vehicle_id=vehicle_id,
         action_id=action_id,
         origin_id=origin_id,
@@ -259,3 +268,32 @@ def summarize_access_events(
     if date_from is not None or date_to is not None:
         period = AccessEventSummaryPeriod(date_from=date_from, date_to=date_to)
     return AccessEventSummaryRead(**summary_data, period=period)
+
+
+def list_recent_access_events(
+    db: Session,
+    *,
+    limit: int = 10,
+    status: AccessEventStatus | None = None,
+    person_type: PersonType | None = None,
+    origin_id: int | None = None,
+) -> list[AccessEvent]:
+    return access_event_repository.list_access_events(
+        db,
+        limit=limit,
+        status=status,
+        person_type=person_type,
+        origin_id=origin_id,
+    )
+
+
+def get_access_event_stats(db: Session) -> AccessEventStatsRead:
+    """Use the project's UTC-naive database convention for the current day."""
+    now = datetime.now(UTC)
+    date_from = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+    date_to = date_from + timedelta(days=1)
+    return AccessEventStatsRead(
+        **access_event_repository.get_access_event_stats(
+            db, date_from=date_from, date_to=date_to
+        )
+    )

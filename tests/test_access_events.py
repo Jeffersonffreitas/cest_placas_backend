@@ -416,6 +416,12 @@ def test_access_events_summary_returns_filtered_totals(
         "total_upload": 2,
         "total_by_status": {"matched": 1, "not_found": 1},
         "total_by_source": {"manual": 0, "upload": 2},
+        "total_access_granted": 0,
+        "total_vehicle_not_registered": 0,
+        "total_person_not_linked": 0,
+        "total_invalid_plate": 0,
+        "total_low_confidence": 0,
+        "total_ocr_error": 0,
         "period": {
             "date_from": "2026-05-12T08:30:00",
             "date_to": "2026-05-12T10:30:00",

@@ -1,11 +1,12 @@
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from app.models.access_event import AccessEvent
 from app.models.domain import Domain
 from app.models.person import Person
+from app.models.vehicle import Vehicle
 
 
 def _apply_access_event_filters(
@@ -15,6 +16,7 @@ def _apply_access_event_filters(
     origin: str | None = None,
     status: str | None = None,
     person_id: int | None = None,
+    person_type: str | None = None,
     vehicle_id: int | None = None,
     action_id: int | None = None,
     origin_id: int | None = None,
@@ -29,6 +31,10 @@ def _apply_access_event_filters(
         statement = statement.where(AccessEvent.status == status)
     if person_id is not None:
         statement = statement.where(AccessEvent.person_id == person_id)
+    if person_type is not None:
+        statement = statement.where(
+            AccessEvent.person.has(Person.person_type == person_type)
+        )
     if vehicle_id is not None:
         statement = statement.where(AccessEvent.vehicle_id == vehicle_id)
     if action_id is not None:
@@ -44,7 +50,9 @@ def _apply_access_event_filters(
 
 def _load_options():
     return (
-        joinedload(AccessEvent.vehicle),
+        joinedload(AccessEvent.vehicle).joinedload(Vehicle.brand_domain),
+        joinedload(AccessEvent.vehicle).joinedload(Vehicle.model_domain),
+        joinedload(AccessEvent.vehicle).joinedload(Vehicle.color_domain),
         joinedload(AccessEvent.person),
         joinedload(AccessEvent.plate_read),
         joinedload(AccessEvent.action),
@@ -70,10 +78,11 @@ def get_access_event(db: Session, access_event_id: int) -> AccessEvent | None:
 
 
 def _count_map(db: Session, statement) -> dict[str, int]:
-    return {
-        str(key) if key is not None else "NAO_INFORMADO": int(total)
-        for key, total in db.execute(statement).all()
-    }
+    counts: dict[str, int] = {}
+    for key, total in db.execute(statement).all():
+        normalized_key = str(key) if key is not None else "NAO_INFORMADO"
+        counts[normalized_key] = counts.get(normalized_key, 0) + int(total)
+    return counts
 
 
 def summarize_access_events(db: Session, **filters) -> dict[str, object]:
@@ -144,7 +153,69 @@ def summarize_access_events(db: Session, **filters) -> dict[str, object]:
         "total_upload": total_by_source.get("upload", 0),
         "total_by_status": total_by_status,
         "total_by_source": total_by_source,
+        "total_access_granted": by_status.get("ACESSO_LIBERADO", 0),
+        "total_vehicle_not_registered": by_status.get(
+            "VEICULO_NAO_CADASTRADO", 0
+        ),
+        "total_person_not_linked": by_status.get("PESSOA_NAO_VINCULADA", 0),
+        "total_invalid_plate": by_status.get("PLACA_INVALIDA", 0),
+        "total_low_confidence": by_status.get("OCR_BAIXA_CONFIANCA", 0),
+        "total_ocr_error": by_status.get("ERRO_OCR", 0),
     }
+
+
+def get_access_event_stats(
+    db: Session, *, date_from: datetime, date_to: datetime
+) -> dict[str, int]:
+    """Return today's indicators in one aggregate query without multiplicative joins."""
+    in_period = (
+        AccessEvent.created_at >= date_from,
+        AccessEvent.created_at < date_to,
+    )
+    statement = select(
+        func.count(AccessEvent.id).label("total_today"),
+        func.coalesce(
+            func.sum(case((AccessEvent.status == "ACESSO_LIBERADO", 1), else_=0)),
+            0,
+        ).label("access_granted_today"),
+        func.coalesce(
+            func.sum(case((AccessEvent.status != "ACESSO_LIBERADO", 1), else_=0)),
+            0,
+        ).label("unresolved_today"),
+        func.count(func.distinct(AccessEvent.vehicle_id)).label(
+            "unique_vehicles_today"
+        ),
+        func.count(func.distinct(AccessEvent.person_id)).label("unique_people_today"),
+        func.coalesce(
+            func.sum(
+                case(
+                    (AccessEvent.person.has(Person.person_type == "ALUNO"), 1),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("students_today"),
+        func.coalesce(
+            func.sum(
+                case(
+                    (AccessEvent.person.has(Person.person_type == "FUNCIONARIO"), 1),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("employees_today"),
+        func.coalesce(
+            func.sum(
+                case(
+                    (AccessEvent.person.has(Person.person_type == "VISITANTE"), 1),
+                    else_=0,
+                )
+            ),
+            0,
+        ).label("visitors_today"),
+    ).where(*in_period)
+    row = db.execute(statement).one()._mapping
+    return {key: int(value or 0) for key, value in row.items()}
 
 
 def create_access_event(db: Session, data: dict[str, object]) -> AccessEvent:

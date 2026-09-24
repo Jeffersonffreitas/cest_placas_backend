@@ -83,6 +83,11 @@ class AccessEvent(Base):
             return self.person
         return None
 
+    @property
+    def person_type(self) -> str | None:
+        """Expose the resolved person's type without persisting duplicate data."""
+        return self.person.person_type if self.person is not None else None
+
 
 Index("ix_tbleventosacesso_placa_normalizada", AccessEvent.plate_normalized)
 Index("ix_tbleventosacesso_origem", AccessEvent.origin)

@@ -786,6 +786,7 @@ origin=PORTAO_PRINCIPAL
 status=ACESSO_LIBERADO
 person_id=1
 vehicle_id=1
+person_type=ALUNO
 action_id=1
 origin_id=2
 date_from=2026-05-12T00:00:00
@@ -800,6 +801,7 @@ limit maximo: 100
 plate: placa brasileira valida, normalizada antes da busca
 source/origin: origem textual legada ou codigo da origem estruturada
 status: uma situacao operacional valida (valores legados continuam consultaveis)
+person_type: ALUNO, FUNCIONARIO ou VISITANTE
 date_from: deve ser menor ou igual a date_to quando ambos forem enviados
 ```
 
@@ -824,9 +826,11 @@ Filtros aceitos no resumo:
 
 ```text
 source=manual
+plate=ABC1D23
 status=ACESSO_LIBERADO
 person_id=1
 vehicle_id=1
+person_type=ALUNO
 action_id=1
 origin_id=2
 date_from=2026-05-12T00:00:00
@@ -843,6 +847,12 @@ Exemplo de resposta do resumo:
   "by_action": {"ENTRADA": 7, "TENTATIVA": 3},
   "by_person_type": {"ALUNO": 5, "FUNCIONARIO": 2, "NAO_RESOLVIDA": 3},
   "total_events": 10,
+  "total_access_granted": 7,
+  "total_vehicle_not_registered": 3,
+  "total_person_not_linked": 0,
+  "total_invalid_plate": 0,
+  "total_low_confidence": 0,
+  "total_ocr_error": 0,
   "total_matched": 7,
   "total_not_found": 3,
   "total_manual": 4,
@@ -863,6 +873,34 @@ Exemplo de resposta do resumo:
 ```
 
 Quando `date_from` e `date_to` nao forem enviados, `period` retorna `null`.
+
+Consultar os eventos mais recentes para atualizacao do painel operacional:
+
+```powershell
+curl "http://localhost:8000/api/v1/access-events/recent?limit=10&status=ACESSO_LIBERADO&person_type=ALUNO&origin_id=2" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+`GET /api/v1/access-events/recent` ordena os eventos do mais recente para o
+mais antigo. `limit` tem valor padrao 10 e aceita de 1 a 100; tambem sao
+aceitos os filtros opcionais `status`, `person_type` e `origin_id`.
+
+Consultar os indicadores do dia corrente:
+
+```powershell
+curl "http://localhost:8000/api/v1/access-events/stats" `
+  -H "Authorization: Bearer jwt_token"
+```
+
+`GET /api/v1/access-events/stats` retorna `total_today`,
+`access_granted_today`, `unresolved_today`, contagens distintas de veiculos e
+pessoas e as quantidades de eventos de `ALUNO`, `FUNCIONARIO` e `VISITANTE`.
+O dia corrente segue a convencao UTC sem timezone usada nas datas persistidas
+pelo backend.
+
+Na listagem, no resumo e nos eventos recentes, `action` e `origin_domain`
+trazem os dominios estruturados quando existirem. O campo textual `origin` e o
+alias `source` permanecem no contrato por compatibilidade.
 
 Consultar um evento especifico usa
 `GET /api/v1/access-events/{access_event_id}`. A integracao com RM ainda nao foi

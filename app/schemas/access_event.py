@@ -5,7 +5,8 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from app.schemas.common import BaseSchema, ORMBaseSchema
-from app.schemas.person import PersonRead
+from app.schemas.domain import DomainRead
+from app.schemas.person import PersonRead, PersonType
 from app.schemas.student import StudentRead
 from app.schemas.vehicle import VehicleRead
 
@@ -67,6 +68,9 @@ class AccessEventRead(ORMBaseSchema):
     created_at: datetime
     vehicle: VehicleRead | None
     person: PersonRead | None
+    person_type: PersonType | None
+    action: DomainRead | None
+    origin_domain: DomainRead | None
     student: StudentRead | None
     plate_read: PlateReadRead | None
 
@@ -94,6 +98,23 @@ class AccessEventSummary(ORMBaseSchema):
     total_upload: int
     total_by_status: dict[str, int]
     total_by_source: dict[str, int]
+    total_access_granted: int
+    total_vehicle_not_registered: int
+    total_person_not_linked: int
+    total_invalid_plate: int
+    total_low_confidence: int
+    total_ocr_error: int
+
+
+class AccessEventStatsRead(ORMBaseSchema):
+    total_today: int
+    access_granted_today: int
+    unresolved_today: int
+    unique_vehicles_today: int
+    unique_people_today: int
+    students_today: int
+    employees_today: int
+    visitors_today: int
 
 
 AccessEventSummaryRead = AccessEventSummary
