@@ -134,6 +134,18 @@ def test_person_rejects_duplicate_active_registration(client: TestClient) -> Non
     assert response.json()["error"]["code"] == "person_registration_number_conflict"
 
 
+def test_visitor_can_be_created_without_institutional_registration(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/v1/people",
+        json={"person_type": "VISITANTE", "full_name": "Visitante sem matrícula"},
+        headers=_headers(client),
+    )
+    assert response.status_code == 201
+    assert response.json()["registration_number"] is None
+
+
 def test_active_registration_can_repeat_for_another_person_type(
     client: TestClient,
 ) -> None:

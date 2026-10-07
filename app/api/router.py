@@ -2,8 +2,11 @@ from fastapi import APIRouter
 
 from app.api.v1.access_events import router as access_events_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.coordinations import router as coordinations_router
+from app.api.v1.courses import router as courses_router
 from app.api.v1.domains import router as domains_router
 from app.api.v1.health import router as health_router
+from app.api.v1.institutional import router as institutional_router
 from app.api.v1.plates import router as plates_router
 from app.api.v1.people import router as people_router
 from app.api.v1.person_vehicles import router as person_vehicles_router
@@ -14,6 +17,13 @@ from app.core.config import settings
 
 api_router = APIRouter()
 api_router.include_router(auth_router, prefix=f"{settings.api_v1_prefix}/auth")
+api_router.include_router(
+    institutional_router, prefix=f"{settings.api_v1_prefix}/institutional"
+)
+api_router.include_router(
+    coordinations_router, prefix=f"{settings.api_v1_prefix}/coordinations"
+)
+api_router.include_router(courses_router, prefix=f"{settings.api_v1_prefix}/courses")
 api_router.include_router(domains_router, prefix=f"{settings.api_v1_prefix}/domains")
 api_router.include_router(people_router, prefix=f"{settings.api_v1_prefix}/people")
 api_router.include_router(

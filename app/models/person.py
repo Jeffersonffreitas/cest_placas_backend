@@ -14,15 +14,15 @@ class Person(Base):
 
     id: Mapped[int] = mapped_column("intpessoaid", primary_key=True, autoincrement=True)
     person_type: Mapped[str] = mapped_column("strtipopessoa", String(20), nullable=False)
-    registration_number: Mapped[str] = mapped_column(
-        "strmatricula", String(50), nullable=False
+    registration_number: Mapped[str | None] = mapped_column(
+        "strmatricula", String(50), nullable=True
     )
     full_name: Mapped[str] = mapped_column("strnomecompleto", String(255), nullable=False)
     email: Mapped[str | None] = mapped_column("stremail", String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column("strtelefone", String(20), nullable=True)
     course_id: Mapped[int | None] = mapped_column(
         "intcursoid",
-        ForeignKey("tbldominios.intdominioid", name="fk_tblpessoas_curso", ondelete="RESTRICT"),
+        ForeignKey("tblcursos.intcursoid", name="fk_tblpessoas_curso", ondelete="RESTRICT"),
         nullable=True,
     )
     is_active: Mapped[bool] = mapped_column(
@@ -42,7 +42,7 @@ class Person(Base):
         onupdate=func.now(),
     )
 
-    course = relationship("Domain", foreign_keys=[course_id])
+    course = relationship("Course", back_populates="people")
     vehicle_links = relationship("PersonVehicle", back_populates="person")
     access_events = relationship("AccessEvent", back_populates="person")
 

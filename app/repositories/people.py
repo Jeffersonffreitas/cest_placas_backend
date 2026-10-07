@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.person import Person
@@ -33,6 +33,17 @@ def get_person_by_registration_number(
         .order_by(Person.is_active.desc(), Person.id.desc())
     )
     return db.scalars(statement).first()
+
+
+def list_people_by_registration_number(
+    db: Session, registration_number: str,
+) -> list[Person]:
+    statement = (
+        select(Person)
+        .where(func.upper(Person.registration_number) == registration_number.upper())
+        .order_by(Person.id)
+    )
+    return list(db.scalars(statement).all())
 
 
 def get_active_person_by_registration_number(

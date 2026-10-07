@@ -47,6 +47,23 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
             "strnomecompleto",
             "bolativo",
         },
+        "tblcoordenacoes": {
+            "intcoordenacaoid",
+            "strnome",
+            "strsigla",
+            "bolativo",
+            "dtacriacao",
+            "dtaatualizacao",
+        },
+        "tblcursos": {
+            "intcursoid",
+            "intcoordenacaoid",
+            "strnome",
+            "strcodigo",
+            "bolativo",
+            "dtacriacao",
+            "dtaatualizacao",
+        },
         "tbldominios": {
             "intdominioid",
             "intdominiopaiid",
@@ -113,6 +130,8 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
         assert expected_columns.issubset(actual_columns)
 
     assert models.Student.id.property.columns[0].name == "intalunoid"
+    assert models.Coordination.__tablename__ == "tblcoordenacoes"
+    assert models.Course.__tablename__ == "tblcursos"
     assert models.Student.id.key == "id"
     assert "intalunoid" not in {
         column.name for column in models.Vehicle.__table__.columns

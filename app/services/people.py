@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
 from app.models.person import Person
-from app.repositories import domains as domain_repository
+from app.repositories import courses as course_repository
 from app.repositories import people as person_repository
 from app.schemas.person import PersonCreate, PersonUpdate
 
@@ -44,20 +44,20 @@ def get_person_by_registration_number_or_404(
 def _validate_course(db: Session, course_id: int | None) -> None:
     if course_id is None:
         return
-    domain = domain_repository.get_domain(db, course_id)
-    if domain is None or not domain.is_active:
+    course = course_repository.get_course(db, course_id)
+    if course is None or not course.is_active:
         raise AppException(
-            "course_id must reference an active domain.",
+            "course_id must reference an active course.",
             status_code=422,
             code="invalid_course_id",
         )
 
 
 def _ensure_unique_active_registration(
-    db: Session, registration_number: str, person_type: str, *, is_active: bool,
+    db: Session, registration_number: str | None, person_type: str, *, is_active: bool,
     current_person_id: int | None = None,
 ) -> None:
-    if not is_active:
+    if not is_active or registration_number is None:
         return
     person = person_repository.get_active_person_by_registration_number(
         db, registration_number, person_type
@@ -86,11 +86,14 @@ def _commit(db: Session, person: Person) -> Person:
 
 def create_person(db: Session, payload: PersonCreate) -> Person:
     data = payload.model_dump()
-    registration_number = str(data["registration_number"])
+    registration_number = data["registration_number"]
     person_type = str(data["person_type"])
     _validate_course(db, data.get("course_id") if isinstance(data.get("course_id"), int) else None)
     _ensure_unique_active_registration(
-        db, registration_number, person_type, is_active=bool(data["is_active"])
+        db,
+        registration_number if isinstance(registration_number, str) else None,
+        person_type,
+        is_active=bool(data["is_active"]),
     )
     return _commit(db, person_repository.create_person(db, data))
 
@@ -100,9 +103,16 @@ def update_person(db: Session, person_id: int, payload: PersonUpdate) -> Person:
     data = payload.model_dump(exclude_unset=True)
     course_id = data.get("course_id", person.course_id)
     _validate_course(db, course_id if isinstance(course_id, int) else None)
-    registration_number = str(data.get("registration_number", person.registration_number))
+    registration_value = data.get("registration_number", person.registration_number)
+    registration_number = registration_value if isinstance(registration_value, str) else None
     person_type = str(data.get("person_type", person.person_type))
     is_active = bool(data.get("is_active", person.is_active))
+    if person_type != "VISITANTE" and registration_number is None:
+        raise AppException(
+            "registration_number is required for institutional people.",
+            status_code=422,
+            code="registration_number_required",
+        )
     _ensure_unique_active_registration(
         db, registration_number, person_type, is_active=is_active,
         current_person_id=person.id,

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from app.schemas.common import BaseSchema, ORMBaseSchema
 
@@ -11,7 +11,7 @@ PersonType = Literal["ALUNO", "FUNCIONARIO", "VISITANTE"]
 
 class PersonBase(BaseSchema):
     person_type: PersonType
-    registration_number: str = Field(min_length=1, max_length=50)
+    registration_number: str | None = Field(default=None, min_length=1, max_length=50)
     full_name: str = Field(min_length=1, max_length=255)
     email: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=20)
@@ -23,12 +23,18 @@ class PersonBase(BaseSchema):
     def normalize_person_type(cls, value: object) -> object:
         return value.strip().upper() if isinstance(value, str) else value
 
-    @field_validator("email", "phone", mode="before")
+    @field_validator("registration_number", "email", "phone", mode="before")
     @classmethod
     def empty_string_to_none(cls, value: str | None) -> str | None:
         if isinstance(value, str) and not value.strip():
             return None
         return value
+
+    @model_validator(mode="after")
+    def validate_registration_by_person_type(self) -> "PersonBase":
+        if self.person_type != "VISITANTE" and self.registration_number is None:
+            raise ValueError("registration_number is required for institutional people")
+        return self
 
 
 class PersonCreate(PersonBase):
@@ -49,7 +55,7 @@ class PersonUpdate(BaseSchema):
     def normalize_person_type(cls, value: object) -> object:
         return value.strip().upper() if isinstance(value, str) else value
 
-    @field_validator("email", "phone", mode="before")
+    @field_validator("registration_number", "email", "phone", mode="before")
     @classmethod
     def empty_string_to_none(cls, value: str | None) -> str | None:
         if isinstance(value, str) and not value.strip():
@@ -60,7 +66,7 @@ class PersonUpdate(BaseSchema):
 class PersonRead(ORMBaseSchema):
     id: int
     person_type: PersonType
-    registration_number: str
+    registration_number: str | None
     full_name: str
     email: str | None
     phone: str | None

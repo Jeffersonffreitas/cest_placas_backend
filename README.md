@@ -267,9 +267,9 @@ legados de veiculos e eventos.
 
 A tabela `tblpessoas` e a tabela principal de pessoas do sistema e representa
 os tipos `ALUNO`, `FUNCIONARIO` e `VISITANTE`.
-A matricula (`registration_number` na API e `strmatricula` no banco) e o
-identificador operacional e nao pode se repetir entre pessoas ativas do mesmo
-tipo.
+A matricula ou registro funcional (`registration_number` na API e
+`strmatricula` no banco) e o identificador institucional compartilhado por
+alunos e funcionarios. Visitantes podem ser cadastrados sem esse identificador.
 
 Os endpoints protegidos sao:
 
@@ -284,7 +284,7 @@ DELETE /api/v1/people/{person_id}
 
 A listagem aceita `person_type`, `registration_number`, `active`, `skip` e
 `limit`. `course_id` e opcional e, quando informado, deve apontar para um
-registro ativo de `tbldominios`.
+registro ativo de `tblcursos`.
 
 Exemplo de aluno:
 
@@ -313,7 +313,6 @@ Exemplo de visitante:
 ```json
 {
   "person_type": "VISITANTE",
-  "registration_number": "V1001",
   "full_name": "Visitante Credenciado",
   "course_id": null
 }
@@ -323,6 +322,52 @@ Exemplo de visitante:
 compatibilidade. Criacoes e alteracoes feitas por `/api/v1/students` usam
 `tblpessoas` como fonte principal e sincronizam o registro legado sem apagar
 dados. A integracao com o RM ainda nao foi implementada.
+
+### Integracao institucional preparada (Fase 6.8)
+
+A aplicacao possui uma fronteira `InstitutionalPersonProvider` em
+`app/integrations` e um provider local em memoria para desenvolvimento e
+testes. Nesta fase **nao existe conexao com RM nem com outro banco
+institucional**. O adapter real, suas credenciais e sua configuracao ficam para
+uma etapa futura.
+
+O service institucional normaliza a matricula/registro, consulta o provider,
+identifica `ALUNO` ou `FUNCIONARIO`, informa a situacao ativa e pode sincronizar
+o resultado com `tblpessoas`. A sincronizacao reutiliza a pessoa existente por
+`strmatricula`, e idempotente e nao troca automaticamente uma pessoa do tipo
+`VISITANTE`. IDs, vinculos com veiculos, eventos e historico permanecem
+preservados. Pessoas inativas podem ser consultadas, mas nao sao sincronizadas.
+
+As tabelas `tblcoordenacoes` e `tblcursos` representam a estrutura academica.
+Uma coordenacao possui varios cursos e cada curso pertence a uma coordenacao.
+Alunos podem apontar para um curso por `tblpessoas.intcursoid`; funcionarios e
+visitantes podem manter esse campo nulo. A migration
+`0016_institutional_people_courses` preserva cursos legados usados por pessoas
+ao copiar seus dados de `tbldominios` antes de trocar a chave estrangeira.
+
+Endpoints administrativos protegidos:
+
+```text
+GET  /api/v1/institutional/people/{registration}
+POST /api/v1/institutional/people/{registration}/sync
+GET  /api/v1/coordinations
+GET  /api/v1/courses
+```
+
+As listagens aceitam `active` e `name`; cursos tambem aceitam
+`coordination_id`. O retorno da consulta institucional usa JSON em snake_case e
+inclui `registration`, `full_name`, `person_type`, `email`, `active`, `course`
+e `coordination`.
+
+Exemplo de consulta e sincronizacao usando o provider local:
+
+```powershell
+curl "http://localhost:8000/api/v1/institutional/people/20260001" `
+  -H "Authorization: Bearer jwt_token"
+
+curl -X POST "http://localhost:8000/api/v1/institutional/people/20260001/sync" `
+  -H "Authorization: Bearer jwt_token"
+```
 
 ### Vinculos entre pessoas e veiculos
 
