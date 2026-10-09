@@ -44,6 +44,8 @@ def summarize_access_events(
     vehicle_id: Annotated[int | None, Query(gt=0)] = None,
     action_id: Annotated[int | None, Query(gt=0)] = None,
     origin_id: Annotated[int | None, Query(gt=0)] = None,
+    access_point_id: Annotated[int | None, Query(gt=0)] = None,
+    camera_id: Annotated[int | None, Query(gt=0)] = None,
     date_from: Annotated[datetime | None, Query()] = None,
     date_to: Annotated[datetime | None, Query()] = None,
 ) -> AccessEventSummaryRead:
@@ -58,6 +60,8 @@ def summarize_access_events(
         vehicle_id=vehicle_id,
         action_id=action_id,
         origin_id=origin_id,
+        access_point_id=access_point_id,
+        camera_id=camera_id,
         date_from=date_from,
         date_to=date_to,
     )
@@ -76,6 +80,8 @@ def list_recent_access_events(
     access_status: Annotated[AccessEventStatus | None, Query(alias="status")] = None,
     person_type: PersonType | None = None,
     origin_id: Annotated[int | None, Query(gt=0)] = None,
+    access_point_id: Annotated[int | None, Query(gt=0)] = None,
+    camera_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> list[AccessEventListItem]:
     del admin_user
     events = access_event_service.list_recent_access_events(
@@ -84,6 +90,8 @@ def list_recent_access_events(
         status=access_status,
         person_type=person_type,
         origin_id=origin_id,
+        access_point_id=access_point_id,
+        camera_id=camera_id,
     )
     return [AccessEventListItem.model_validate(event) for event in events]
 
@@ -140,6 +148,8 @@ def list_access_events(
     vehicle_id: Annotated[int | None, Query(gt=0)] = None,
     action_id: Annotated[int | None, Query(gt=0)] = None,
     origin_id: Annotated[int | None, Query(gt=0)] = None,
+    access_point_id: Annotated[int | None, Query(gt=0)] = None,
+    camera_id: Annotated[int | None, Query(gt=0)] = None,
     date_from: Annotated[datetime | None, Query()] = None,
     date_to: Annotated[datetime | None, Query()] = None,
 ) -> list[AccessEventListItem]:
@@ -156,6 +166,8 @@ def list_access_events(
         vehicle_id=vehicle_id,
         action_id=action_id,
         origin_id=origin_id,
+        access_point_id=access_point_id,
+        camera_id=camera_id,
         date_from=date_from,
         date_to=date_to,
     )

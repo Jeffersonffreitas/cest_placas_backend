@@ -4,8 +4,10 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, aliased, joinedload
 
 from app.models.access_event import AccessEvent
+from app.models.camera import Camera
 from app.models.domain import Domain
 from app.models.person import Person
+from app.models.plate_read import PlateRead
 from app.models.vehicle import Vehicle
 
 
@@ -20,6 +22,8 @@ def _apply_access_event_filters(
     vehicle_id: int | None = None,
     action_id: int | None = None,
     origin_id: int | None = None,
+    access_point_id: int | None = None,
+    camera_id: int | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ):
@@ -41,6 +45,12 @@ def _apply_access_event_filters(
         statement = statement.where(AccessEvent.action_id == action_id)
     if origin_id is not None:
         statement = statement.where(AccessEvent.origin_id == origin_id)
+    if access_point_id is not None:
+        statement = statement.where(AccessEvent.access_point_id == access_point_id)
+    if camera_id is not None:
+        statement = statement.where(
+            AccessEvent.plate_read.has(PlateRead.camera_id == camera_id)
+        )
     if date_from is not None:
         statement = statement.where(AccessEvent.created_at >= date_from)
     if date_to is not None:
@@ -54,9 +64,12 @@ def _load_options():
         joinedload(AccessEvent.vehicle).joinedload(Vehicle.model_domain),
         joinedload(AccessEvent.vehicle).joinedload(Vehicle.color_domain),
         joinedload(AccessEvent.person),
-        joinedload(AccessEvent.plate_read),
+        joinedload(AccessEvent.plate_read).joinedload(PlateRead.camera).joinedload(
+            Camera.access_point
+        ),
         joinedload(AccessEvent.action),
         joinedload(AccessEvent.origin_domain),
+        joinedload(AccessEvent.access_point),
     )
 
 

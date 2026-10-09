@@ -4,6 +4,9 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
+from app.schemas.access_context import VehicleSide
+from app.schemas.access_point import AccessPointRead
+from app.schemas.camera import CameraRead
 from app.schemas.common import BaseSchema, ORMBaseSchema
 from app.schemas.domain import DomainRead
 from app.schemas.person import PersonRead, PersonType
@@ -32,6 +35,7 @@ class AccessEventCreate(BaseSchema):
     vehicle_id: int | None = Field(default=None, gt=0)
     person_id: int | None = Field(default=None, gt=0)
     plate_read_id: int | None = Field(default=None, gt=0)
+    access_point_id: int | None = Field(default=None, gt=0)
     origin: str = Field(default="manual", min_length=1, max_length=30)
     source: str | None = Field(default=None, min_length=1, max_length=30)
 
@@ -44,13 +48,16 @@ class AccessEventCreate(BaseSchema):
 class PlateReadRead(ORMBaseSchema):
     id: int
     vehicle_id: int | None
+    camera_id: int | None
     plate: str
     source: str
     confidence: Decimal | None
     image_path: str | None
+    vehicle_side: VehicleSide
     read_at: datetime
     created_at: datetime
     updated_at: datetime
+    camera: CameraRead | None
 
 
 class AccessEventRead(ORMBaseSchema):
@@ -60,6 +67,7 @@ class AccessEventRead(ORMBaseSchema):
     plate_read_id: int | None
     action_id: int | None
     origin_id: int | None
+    access_point_id: int | None
     status: AccessEventStatus
     plate_input: str
     plate_normalized: str
@@ -71,6 +79,7 @@ class AccessEventRead(ORMBaseSchema):
     person_type: PersonType | None
     action: DomainRead | None
     origin_domain: DomainRead | None
+    access_point: AccessPointRead | None
     student: StudentRead | None
     plate_read: PlateReadRead | None
 

@@ -23,6 +23,7 @@ Backend inicial em Python para o sistema de reconhecimento de placas veiculares 
 - registro de eventos de acesso em leituras manuais e uploads
 - decisao operacional nas respostas de leitura de placa
 - consulta administrativa de eventos de acesso em `/api/v1/access-events`
+- pontos de acesso e cameras logicas para contextualizar leituras e eventos
 - tratamento padronizado de erros
 - estrutura preparada para evolucao do dominio
 
@@ -78,7 +79,7 @@ Copy-Item .env.example .env
 - As tabelas iniciais foram preparadas com `InnoDB` e `utf8mb4`.
 - As tabelas fisicas usam nomes em portugues com prefixo `tbl`, como
   `tblalunos`, `tblveiculos`, `tblleiturasplacas`, `tbleventosacesso`,
-  `tblusuarios` e `tbllogsauditoria`.
+  `tblusuarios`, `tbllogsauditoria`, `tblpontosacesso` e `tblcameras`.
 - As colunas fisicas usam nomes em minusculo e o padrao solicitado pela
   coordenacao: `int` para IDs e numeros inteiros, `num` para decimais, `str`
   para textos, `dta` para datas e `bol` para campos booleanos.
@@ -686,6 +687,11 @@ comuns, retorna `image_path` e a confianca produzida pelo OCR. Assim,
 `plate_read_id` sempre identifica a leitura registrada e `access_event_id`
 identifica o evento criado quando o processamento chega a essa etapa.
 
+Os campos multipart opcionais `camera_id`, `access_point_id` e `vehicle_side`
+podem acompanhar a imagem. Eles apenas transportam metadados locais; nao
+alteram o OCR e nao tentam identificar automaticamente a parte frontal ou
+traseira do veiculo.
+
 Sem `mock_plate`, o ambiente precisa ter o Tesseract OCR instalado, alem das
 dependencias Python instaladas por `requirements.txt`. No Windows, a integracao
 procura automaticamente o executavel em
@@ -950,6 +956,89 @@ alias `source` permanecem no contrato por compatibilidade.
 Consultar um evento especifico usa
 `GET /api/v1/access-events/{access_event_id}`. A integracao com RM ainda nao foi
 implementada nesta fase.
+
+## Fase 6.9: pontos de acesso e cameras logicas
+
+`tblpontosacesso` representa o local fisico estruturado onde um evento ocorre,
+por exemplo Portao Principal, Portao de Funcionarios ou Guarita Principal. O
+campo publico `direction` aceita `ENTRADA`, `SAIDA` e `MISTO`.
+
+`tblcameras` representa somente uma camera **logica** cadastrada localmente. A
+relacao e `access point 1:N cameras`: cada camera pertence a exatamente um
+ponto, e um ponto pode possuir varias cameras. O codigo da camera e unico.
+
+Nesta fase nao existe integracao com camera fisica. O backend nao armazena IP,
+URL RTSP, usuario, senha, token, credencial ou stream; tambem nao captura video
+nem frames de dispositivos. Testes e simulacoes usam apenas registros locais,
+fixtures, mocks e o upload ja existente. A integracao com hardware fica para
+uma fase futura.
+
+Todos os endpoints abaixo exigem autenticacao administrativa:
+
+```text
+GET    /api/v1/access-points
+GET    /api/v1/access-points/{access_point_id}
+POST   /api/v1/access-points
+PUT    /api/v1/access-points/{access_point_id}
+DELETE /api/v1/access-points/{access_point_id}
+
+GET    /api/v1/cameras
+GET    /api/v1/cameras/{camera_id}
+POST   /api/v1/cameras
+PUT    /api/v1/cameras/{camera_id}
+DELETE /api/v1/cameras/{camera_id}
+```
+
+Os dois `DELETE` sao logicos e definem `is_active=false`. Pontos podem ser
+filtrados por `active`, `direction` e `name`; cameras por `active`,
+`access_point_id` e `name`. As duas listagens aceitam `skip` e `limit`, com
+limite entre 1 e 100.
+
+Criar um ponto de acesso:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/access-points" `
+  -H "Authorization: Bearer jwt_token" `
+  -H "Content-Type: application/json" `
+  -d '{"name":"Portao Principal","code":"PORTAO_PRINCIPAL","direction":"ENTRADA"}'
+```
+
+Criar uma camera logica vinculada ao ponto:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/cameras" `
+  -H "Authorization: Bearer jwt_token" `
+  -H "Content-Type: application/json" `
+  -d '{"access_point_id":1,"name":"Camera Portao Principal","code":"CAM-PRINCIPAL"}'
+```
+
+O lado observado pertence a `tblleiturasplacas`, nao ao veiculo, e aceita
+`FRONTAL`, `TRASEIRA` ou `INDEFINIDO`. O valor padrao e `INDEFINIDO`. Camera e
+ponto continuam opcionais para preservar clientes antigos:
+
+```powershell
+curl -X POST "http://localhost:8000/api/v1/plates/read-manual" `
+  -H "Authorization: Bearer jwt_token" `
+  -H "Content-Type: application/json" `
+  -d '{"plate":"QWE1A23","camera_id":1,"vehicle_side":"FRONTAL"}'
+```
+
+Quando `camera_id` e informado, o backend valida a camera e seu ponto ativos,
+grava `camera_id` na leitura e deriva `access_point_id` para o evento. Se o
+cliente tambem enviar um ponto diferente daquele da camera, a requisicao e
+rejeitada. Apenas `access_point_id` tambem pode ser enviado. Sem nenhum desses
+campos, o fluxo anterior permanece inalterado.
+
+As respostas operacionais preservam `plate_read_id`, `access_event_id` e todos
+os campos das fases anteriores, acrescentando `vehicle_side`, `camera` e
+`access_point` quando disponiveis. A listagem, o resumo e os eventos recentes
+aceitam `access_point_id` e `camera_id`; o filtro de camera usa a leitura
+relacionada sem duplicar contagens.
+
+Pontos de `ENTRADA` e `SAIDA` tentam resolver o dominio de acao de mesmo codigo
+quando ele estiver ativo. Pontos `MISTO` nao inferem acao. A ausencia desses
+dominios nunca impede o registro da leitura ou do evento, e `origin_id` continua
+existindo para compatibilidade.
 
 ## Rodar testes
 

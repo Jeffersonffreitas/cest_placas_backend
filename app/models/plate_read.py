@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base
@@ -9,12 +9,27 @@ from app.db.base_class import Base
 
 class PlateRead(Base):
     __tablename__ = "tblleiturasplacas"
-    __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
+    __table_args__ = (
+        CheckConstraint(
+            "strladoveiculo IN ('FRONTAL', 'TRASEIRA', 'INDEFINIDO')",
+            name="ladoveiculo",
+        ),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
 
     id: Mapped[int] = mapped_column("intleituraplacaid", primary_key=True, autoincrement=True)
     vehicle_id: Mapped[int | None] = mapped_column(
         "intveiculoid",
         ForeignKey("tblveiculos.intveiculoid", name="fk_tblleiturasplacas_veiculo", ondelete="SET NULL"),
+        nullable=True,
+    )
+    camera_id: Mapped[int | None] = mapped_column(
+        "intcameraid",
+        ForeignKey(
+            "tblcameras.intcameraid",
+            name="fk_tblleiturasplacas_camera",
+            ondelete="SET NULL",
+        ),
         nullable=True,
     )
     plate: Mapped[str] = mapped_column("strplaca", String(10), nullable=False)
@@ -27,6 +42,13 @@ class PlateRead(Base):
     )
     confidence: Mapped[Decimal | None] = mapped_column("numconfianca", Numeric(5, 2), nullable=True)
     image_path: Mapped[str | None] = mapped_column("strcaminhoimagem", String(255), nullable=True)
+    vehicle_side: Mapped[str] = mapped_column(
+        "strladoveiculo",
+        String(10),
+        nullable=False,
+        default="INDEFINIDO",
+        server_default="INDEFINIDO",
+    )
     read_at: Mapped[datetime] = mapped_column("dtaleitura", DateTime(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         "dtacriacao",
@@ -43,8 +65,10 @@ class PlateRead(Base):
     )
 
     vehicle = relationship("Vehicle", back_populates="plate_reads")
+    camera = relationship("Camera", back_populates="plate_reads")
     access_events = relationship("AccessEvent", back_populates="plate_read")
 
 
 Index("ix_tblleiturasplacas_placa", PlateRead.plate)
 Index("ix_tblleiturasplacas_leitura", PlateRead.read_at)
+Index("idx_tblleiturasplacas_intcameraid", PlateRead.camera_id)

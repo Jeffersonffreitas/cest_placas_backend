@@ -3,7 +3,10 @@ from typing import Literal
 
 from pydantic import Field
 
+from app.schemas.access_context import VehicleSide
+from app.schemas.access_point import AccessPointSummary
 from app.schemas.access_event import AccessEventRead, AccessEventStatus
+from app.schemas.camera import CameraSummary
 from app.schemas.common import BaseSchema
 from app.schemas.person import PersonRead, PersonType
 from app.schemas.student import StudentRead
@@ -23,6 +26,9 @@ OperationalDecision = Literal[
 
 class ManualPlateReadRequest(BaseSchema):
     plate: str = Field(min_length=1, max_length=20)
+    access_point_id: int | None = Field(default=None, gt=0)
+    camera_id: int | None = Field(default=None, gt=0)
+    vehicle_side: VehicleSide = "INDEFINIDO"
 
 
 class ManualPlateReadResponse(BaseSchema):
@@ -37,6 +43,9 @@ class ManualPlateReadResponse(BaseSchema):
     confidence: float | None = None
     status: AccessEventStatus
     operational_decision: OperationalDecision
+    vehicle_side: VehicleSide
+    camera: CameraSummary | None
+    access_point: AccessPointSummary | None
     access_event: AccessEventRead
     vehicle: VehicleRead | None
     person: PersonRead | None

@@ -15,6 +15,7 @@ from app.models.access_event import AccessEvent
 from app.repositories import plate_reads as plate_read_repository
 from app.schemas.plate import ManualPlateReadRequest, OperationalDecision
 from app.services import access_events as access_event_service
+from app.services import cameras as camera_service
 from app.services.plate_utils import normalize_and_validate_plate, normalize_plate
 
 
@@ -105,6 +106,26 @@ def _error_operational_details(
         "action": access_event_action(access_event),
         "origin": access_event_origin(access_event),
         "created_at": access_event.created_at.isoformat(),
+        "vehicle_side": (
+            access_event.plate_read.vehicle_side
+            if access_event.plate_read is not None
+            else "INDEFINIDO"
+        ),
+        "camera": (
+            {"id": access_event.plate_read.camera.id, "name": access_event.plate_read.camera.name}
+            if access_event.plate_read is not None
+            and access_event.plate_read.camera is not None
+            else None
+        ),
+        "access_point": (
+            {
+                "id": access_event.access_point.id,
+                "name": access_event.access_point.name,
+                "direction": access_event.access_point.direction,
+            }
+            if access_event.access_point is not None
+            else None
+        ),
     }
 
 
@@ -123,15 +144,21 @@ def _register_plate_read_and_event(
     confidence: float | None = None,
     image_path: str | None = None,
     status_override: OperationalDecision | None = None,
+    camera_id: int | None = None,
+    access_point_id: int | None = None,
+    access_point_direction: str | None = None,
+    vehicle_side: str = "INDEFINIDO",
 ) -> AccessEvent:
     plate_read = plate_read_repository.create_plate_read(
         db,
         {
             "vehicle_id": None,
+            "camera_id": camera_id,
             "plate": plate_normalized[:10],
             "source": source,
             "confidence": _confidence_for_storage(confidence),
             "image_path": image_path,
+            "vehicle_side": vehicle_side,
             "read_at": datetime.now(UTC).replace(tzinfo=None),
         },
     )
@@ -142,6 +169,8 @@ def _register_plate_read_and_event(
         plate_normalized=plate_normalized,
         origin=source,
         plate_read_id=plate_read.id,
+        access_point_id=access_point_id,
+        access_point_direction=access_point_direction,
         status_override=status_override,
     )
     plate_read.vehicle_id = access_event.vehicle_id
@@ -149,6 +178,9 @@ def _register_plate_read_and_event(
 
 
 def read_manual_plate(db: Session, payload: ManualPlateReadRequest) -> AccessEvent:
+    location = camera_service.resolve_read_location(
+        db, camera_id=payload.camera_id, access_point_id=payload.access_point_id
+    )
     plate_input = payload.plate
     plate_normalized = normalize_plate(plate_input)
     try:
@@ -160,6 +192,16 @@ def read_manual_plate(db: Session, payload: ManualPlateReadRequest) -> AccessEve
             plate_normalized=plate_normalized,
             source="manual",
             status_override=OPERATIONAL_DECISION_INVALID_PLATE,
+            camera_id=location.camera.id if location.camera is not None else None,
+            access_point_id=(
+                location.access_point.id if location.access_point is not None else None
+            ),
+            access_point_direction=(
+                location.access_point.direction
+                if location.access_point is not None
+                else None
+            ),
+            vehicle_side=payload.vehicle_side,
         )
         db.commit()
         raise AppException(
@@ -178,6 +220,14 @@ def read_manual_plate(db: Session, payload: ManualPlateReadRequest) -> AccessEve
         plate_input=plate_input,
         plate_normalized=plate_normalized,
         source="manual",
+        camera_id=location.camera.id if location.camera is not None else None,
+        access_point_id=(
+            location.access_point.id if location.access_point is not None else None
+        ),
+        access_point_direction=(
+            location.access_point.direction if location.access_point is not None else None
+        ),
+        vehicle_side=payload.vehicle_side,
     )
     db.commit()
     db.refresh(access_event)
@@ -207,7 +257,18 @@ def _is_ocr_confidence_sufficient(confidence: float | None) -> bool:
     return confidence is not None and confidence >= MIN_OCR_CONFIDENCE
 
 
-def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = None) -> ImagePlateReadResult:
+def read_image_plate(
+    db: Session,
+    file: UploadFile,
+    mock_plate: str | None = None,
+    *,
+    camera_id: int | None = None,
+    access_point_id: int | None = None,
+    vehicle_side: str = "INDEFINIDO",
+) -> ImagePlateReadResult:
+    location = camera_service.resolve_read_location(
+        db, camera_id=camera_id, access_point_id=access_point_id
+    )
     image_path = _save_upload_file(file)
     confidence: float | None = None
     confidence_is_sufficient = True
@@ -224,6 +285,16 @@ def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = Non
                 source="upload",
                 image_path=image_path,
                 status_override=OPERATIONAL_DECISION_OCR_ERROR,
+                camera_id=location.camera.id if location.camera is not None else None,
+                access_point_id=(
+                    location.access_point.id if location.access_point is not None else None
+                ),
+                access_point_direction=(
+                    location.access_point.direction
+                    if location.access_point is not None
+                    else None
+                ),
+                vehicle_side=vehicle_side,
             )
             db.commit()
             raise AppException(
@@ -253,6 +324,16 @@ def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = Non
             confidence=confidence,
             image_path=image_path,
             status_override=OPERATIONAL_DECISION_INVALID_PLATE,
+            camera_id=location.camera.id if location.camera is not None else None,
+            access_point_id=(
+                location.access_point.id if location.access_point is not None else None
+            ),
+            access_point_direction=(
+                location.access_point.direction
+                if location.access_point is not None
+                else None
+            ),
+            vehicle_side=vehicle_side,
         )
         db.commit()
         raise AppException(
@@ -277,6 +358,14 @@ def read_image_plate(db: Session, file: UploadFile, mock_plate: str | None = Non
         confidence=confidence,
         image_path=image_path,
         status_override=None if confidence_is_sufficient else OPERATIONAL_DECISION_LOW_CONFIDENCE,
+        camera_id=location.camera.id if location.camera is not None else None,
+        access_point_id=(
+            location.access_point.id if location.access_point is not None else None
+        ),
+        access_point_direction=(
+            location.access_point.direction if location.access_point is not None else None
+        ),
+        vehicle_side=vehicle_side,
     )
     db.commit()
     db.refresh(access_event)

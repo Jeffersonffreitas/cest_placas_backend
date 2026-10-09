@@ -21,6 +21,7 @@ from app.schemas.access_event import (
 )
 from app.schemas.person import PersonType
 from app.services.plate_utils import normalize_and_validate_plate
+from app.services import access_points as access_point_service
 
 
 def _validate_date_range(date_from: datetime | None, date_to: datetime | None) -> None:
@@ -76,6 +77,8 @@ def create_access_event_from_plate_read(
     plate_normalized: str,
     origin: str,
     plate_read_id: int,
+    access_point_id: int | None = None,
+    access_point_direction: str | None = None,
     status_override: AccessEventStatus | None = None,
 ) -> AccessEvent:
     """Create the event paired with a manual or image plate read.
@@ -89,10 +92,19 @@ def create_access_event_from_plate_read(
     if status_override is None:
         vehicle, person, resolved_status = _resolved_access_data(db, plate_normalized)
 
-    action_code = "ENTRADA" if resolved_status == "ACESSO_LIBERADO" else "TENTATIVA"
+    if access_point_direction in {"ENTRADA", "SAIDA"}:
+        action_code = access_point_direction
+    elif access_point_direction == "MISTO":
+        action_code = None
+    else:
+        action_code = "ENTRADA" if resolved_status == "ACESSO_LIBERADO" else "TENTATIVA"
     origin_code = "TESTE_MANUAL" if origin == "manual" else "UPLOAD_IMAGEM"
-    action = domain_repository.get_active_by_type_and_code(
-        db, type="ACAO_ACESSO", code=action_code
+    action = (
+        domain_repository.get_active_by_type_and_code(
+            db, type="ACAO_ACESSO", code=action_code
+        )
+        if action_code is not None
+        else None
     )
     origin_domain = domain_repository.get_active_by_type_and_code(
         db, type="ORIGEM_ACESSO", code=origin_code
@@ -105,6 +117,7 @@ def create_access_event_from_plate_read(
             "plate_read_id": plate_read_id,
             "action_id": action.id if action is not None else None,
             "origin_id": origin_domain.id if origin_domain is not None else None,
+            "access_point_id": access_point_id,
             "status": resolved_status,
             "plate_input": plate_input[:20],
             "plate_normalized": plate_normalized[:10],
@@ -121,6 +134,7 @@ def create_resolved_access_event(
     action_id: int | None = None,
     origin_id: int | None = None,
     plate_read_id: int | None = None,
+    access_point_id: int | None = None,
     status_override: str | None = None,
 ) -> AccessEvent:
     plate_normalized = normalize_and_validate_plate(plate_input)
@@ -133,6 +147,7 @@ def create_resolved_access_event(
             "plate_read_id": plate_read_id,
             "action_id": action_id,
             "origin_id": origin_id,
+            "access_point_id": access_point_id,
             "status": status_override or resolved_status,
             "plate_input": plate_input,
             "plate_normalized": plate_normalized,
@@ -143,11 +158,14 @@ def create_resolved_access_event(
 
 
 def create_access_event(db: Session, payload: AccessEventCreate) -> AccessEvent:
-    data = payload.model_dump()
     _validate_domain(db, payload.action_id, "ACAO_ACESSO", "action_id")
     origin_domain = _validate_domain(
         db, payload.origin_id, "ORIGEM_ACESSO", "origin_id"
     )
+    if payload.access_point_id is not None:
+        access_point_service.get_active_access_point_or_error(
+            db, payload.access_point_id
+        )
     if payload.vehicle_id is not None and vehicle_repository.get_vehicle(db, payload.vehicle_id) is None:
         raise AppException("Vehicle was not found.", status_code=404, code="vehicle_not_found")
     if payload.person_id is not None and db.get(Person, payload.person_id) is None:
@@ -164,6 +182,7 @@ def create_access_event(db: Session, payload: AccessEventCreate) -> AccessEvent:
         action_id=payload.action_id,
         origin_id=payload.origin_id,
         plate_read_id=payload.plate_read_id,
+        access_point_id=payload.access_point_id,
     )
     if payload.vehicle_id is not None and event.vehicle_id != payload.vehicle_id:
         db.rollback()
@@ -213,6 +232,8 @@ def list_access_events(
     vehicle_id: int | None = None,
     action_id: int | None = None,
     origin_id: int | None = None,
+    access_point_id: int | None = None,
+    camera_id: int | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> list[AccessEvent]:
@@ -230,6 +251,8 @@ def list_access_events(
         vehicle_id=vehicle_id,
         action_id=action_id,
         origin_id=origin_id,
+        access_point_id=access_point_id,
+        camera_id=camera_id,
         date_from=date_from,
         date_to=date_to,
     )
@@ -246,6 +269,8 @@ def summarize_access_events(
     vehicle_id: int | None = None,
     action_id: int | None = None,
     origin_id: int | None = None,
+    access_point_id: int | None = None,
+    camera_id: int | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> AccessEventSummaryRead:
@@ -261,6 +286,8 @@ def summarize_access_events(
         vehicle_id=vehicle_id,
         action_id=action_id,
         origin_id=origin_id,
+        access_point_id=access_point_id,
+        camera_id=camera_id,
         date_from=date_from,
         date_to=date_to,
     )
@@ -277,6 +304,8 @@ def list_recent_access_events(
     status: AccessEventStatus | None = None,
     person_type: PersonType | None = None,
     origin_id: int | None = None,
+    access_point_id: int | None = None,
+    camera_id: int | None = None,
 ) -> list[AccessEvent]:
     return access_event_repository.list_access_events(
         db,
@@ -284,6 +313,8 @@ def list_recent_access_events(
         status=status,
         person_type=person_type,
         origin_id=origin_id,
+        access_point_id=access_point_id,
+        camera_id=camera_id,
     )
 
 

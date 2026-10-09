@@ -1,6 +1,8 @@
 from app.db.base_class import Base
 from app.models.access_event import AccessEvent
+from app.models.access_point import AccessPoint
 from app.models.audit_log import AuditLog
+from app.models.camera import Camera
 from app.models.coordination import Coordination
 from app.models.course import Course
 from app.models.domain import Domain
@@ -13,5 +15,6 @@ from app.models.vehicle import Vehicle
 
 __all__ = [
     "Base", "User", "Student", "Vehicle", "PlateRead", "AccessEvent",
+    "AccessPoint", "Camera",
     "AuditLog", "Coordination", "Course", "Domain", "Person", "PersonVehicle",
 ]

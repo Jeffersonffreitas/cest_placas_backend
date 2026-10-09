@@ -40,6 +40,15 @@ class AccessEvent(Base):
         ForeignKey("tbldominios.intdominioid", name="fk_tbleventosacesso_origem", ondelete="RESTRICT"),
         nullable=True,
     )
+    access_point_id: Mapped[int | None] = mapped_column(
+        "intpontoacessoid",
+        ForeignKey(
+            "tblpontosacesso.intpontoacessoid",
+            name="fk_tbleventosacesso_pontoacesso",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+    )
     status: Mapped[str] = mapped_column("strsituacao", String(30), nullable=False)
     plate_input: Mapped[str] = mapped_column("strplacaentrada", String(20), nullable=False)
     plate_normalized: Mapped[str] = mapped_column("strplacanormalizada", String(10), nullable=False)
@@ -55,6 +64,7 @@ class AccessEvent(Base):
     plate_read = relationship("PlateRead", back_populates="access_events")
     action = relationship("Domain", foreign_keys=[action_id])
     origin_domain = relationship("Domain", foreign_keys=[origin_id])
+    access_point = relationship("AccessPoint", back_populates="access_events")
 
     @property
     def source(self) -> str:
@@ -97,4 +107,5 @@ Index("ix_tbleventosacesso_pessoa", AccessEvent.person_id)
 Index("ix_tbleventosacesso_leituraplaca", AccessEvent.plate_read_id)
 Index("ix_tbleventosacesso_acao", AccessEvent.action_id)
 Index("ix_tbleventosacesso_origem_id", AccessEvent.origin_id)
+Index("idx_tbleventosacesso_intpontoacessoid", AccessEvent.access_point_id)
 Index("ix_tbleventosacesso_criacao", AccessEvent.created_at)
