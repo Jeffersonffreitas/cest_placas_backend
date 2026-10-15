@@ -78,7 +78,7 @@ Copy-Item .env.example .env
 - O driver configurado e `PyMySQL`.
 - As tabelas iniciais foram preparadas com `InnoDB` e `utf8mb4`.
 - As tabelas fisicas usam nomes em portugues com prefixo `tbl`, como
-  `tblalunos`, `tblveiculos`, `tblleiturasplacas`, `tbleventosacesso`,
+  `tblpessoas`, `tblpessoaveiculo`, `tblveiculos`, `tblleiturasplacas`, `tbleventosacesso`,
   `tblusuarios`, `tbllogsauditoria`, `tblpontosacesso` e `tblcameras`.
 - As colunas fisicas usam nomes em minusculo e o padrao solicitado pela
   coordenacao: `int` para IDs e numeros inteiros, `num` para decimais, `str`
@@ -92,8 +92,8 @@ Copy-Item .env.example .env
 Exemplos de colunas fisicas:
 
 ```text
-tblalunos.intalunoid
-tblalunos.strmatricula
+tblpessoas.intpessoaid
+tblpessoas.strmatricula
 tblveiculos.intveiculoid
 tblveiculos.strplaca
 tblleiturasplacas.numconfianca
@@ -259,10 +259,10 @@ curl -X DELETE "http://localhost:8000/api/v1/students/1" `
   -H "Authorization: Bearer jwt_token"
 ```
 
-A desativacao marca `is_active=false`. Os endpoints de alunos usam
-`tblpessoas` com `strtipopessoa = 'ALUNO'` como fonte principal e mantem o
-registro equivalente em `tblalunos` apenas para compatibilidade com os fluxos
-legados de veiculos e eventos.
+A desativacao marca `is_active=false`. Os endpoints de alunos sao mantidos
+como contrato de compatibilidade e usam exclusivamente `tblpessoas` com
+`strtipopessoa = 'ALUNO'`. Eles nao criam nem atualizam uma tabela fisica
+especifica de alunos.
 
 ## Pessoas
 
@@ -319,10 +319,12 @@ Exemplo de visitante:
 }
 ```
 
-`tblalunos` e os endpoints `/api/v1/students` continuam existindo por
-compatibilidade. Criacoes e alteracoes feitas por `/api/v1/students` usam
-`tblpessoas` como fonte principal e sincronizam o registro legado sem apagar
-dados. A integracao com o RM ainda nao foi implementada.
+`tblpessoas` e a unica entidade local persistente para pessoas. A antiga
+`tblalunos` foi descontinuada e removida pela migration
+`0018_remove_legacy_students`; os endpoints `/api/v1/students` continuam apenas
+como compatibilidade e filtram pessoas do tipo `ALUNO`. `FUNCIONARIO` e
+`VISITANTE` tambem permanecem em `tblpessoas`. A integracao real com o RM ainda
+nao foi implementada.
 
 ### Integracao institucional preparada (Fase 6.8)
 
@@ -538,6 +540,10 @@ A placa normalizada resolve o veiculo em `tblveiculos` e depois uma pessoa por
 um vinculo ativo em `tblpessoaveiculo`. O fluxo usa `tblpessoas` para os tipos
 `ALUNO`, `FUNCIONARIO` e `VISITANTE`; ele nao depende de `tblalunos` nem de
 `intalunoid` em `tblveiculos`.
+
+Eventos de acesso persistem somente `intpessoaid`; veiculos nao armazenam
+`person_id`, `student_id`, `intpessoaid` ou `intalunoid`. A relacao entre
+pessoas e veiculos continua N:N exclusivamente por `tblpessoaveiculo`.
 
 As respostas de leitura tambem retornam `operational_decision`, pensado para o
 uso na portaria:
@@ -809,9 +815,9 @@ Os dominios `ENTRADA` ou `TENTATIVA` (`ACAO_ACESSO`) e `TESTE_MANUAL` ou
 `UPLOAD_IMAGEM` (`ORIGEM_ACESSO`) sao usados quando estiverem ativos; sua
 ausencia nao interrompe o fluxo.
 
-Esta fase ainda nao integra com o RM e nao depende de `tblalunos`. Tambem nao
-existe identificacao real de camera frontal ou traseira; a origem representa
-somente o fluxo manual ou o upload da imagem.
+Esta fase ainda nao integra com o RM e nao depende de `tblalunos`. As cameras
+permanecem cadastros logicos; camera fisica, RTSP e captura real ainda nao estao
+integrados.
 
 Criar manualmente um evento:
 

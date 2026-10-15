@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.models.person import Person
 from app.models.person_vehicle import PersonVehicle
-from app.models.student import Student
 from app.models.vehicle import Vehicle
 
 
@@ -211,16 +210,27 @@ def test_old_students_vehicles_and_plate_lookup_still_work(client: TestClient) -
 
 
 def test_legacy_vehicle_links_are_copied_idempotently(db_session: Session) -> None:
-    student = Student(registration_number="MIG200", full_name="Aluno Migrado")
     person = Person(
         person_type="ALUNO", registration_number="MIG200", full_name="Aluno Migrado"
     )
-    db_session.add_all([student, person])
+    db_session.add(person)
     db_session.flush()
     vehicle = Vehicle(plate="PQR6S78")
     db_session.add(vehicle)
     db_session.commit()
 
+    db_session.execute(text("""
+        CREATE TABLE tblalunos (
+            intalunoid INTEGER PRIMARY KEY,
+            strmatricula VARCHAR(50) NOT NULL
+        )
+    """))
+    db_session.execute(
+        text(
+            "INSERT INTO tblalunos (intalunoid, strmatricula) "
+            "VALUES (200, 'MIG200')"
+        )
+    )
     db_session.execute(
         text(
             "ALTER TABLE tblveiculos ADD COLUMN intalunoid INTEGER "
@@ -232,7 +242,7 @@ def test_legacy_vehicle_links_are_copied_idempotently(db_session: Session) -> No
             "UPDATE tblveiculos SET intalunoid = :student_id "
             "WHERE intveiculoid = :vehicle_id"
         ),
-        {"student_id": student.id, "vehicle_id": vehicle.id},
+        {"student_id": 200, "vehicle_id": vehicle.id},
     )
     db_session.commit()
 

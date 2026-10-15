@@ -1,41 +1,14 @@
-from datetime import datetime
+"""Compatibility name for student-facing code.
 
-from sqlalchemy import Boolean, DateTime, Index, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+Students are persisted as ``Person`` rows with ``person_type='ALUNO'``. The
+alias keeps imports used by older callers working without registering a
+``tblalunos`` table in SQLAlchemy metadata.
+"""
 
-from app.db.base_class import Base
+from app.models.person import Person
 
 
-class Student(Base):
-    __tablename__ = "tblalunos"
-    __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
+Student = Person
 
-    id: Mapped[int] = mapped_column("intalunoid", primary_key=True, autoincrement=True)
-    registration_number: Mapped[str] = mapped_column("strmatricula", String(50), nullable=False)
-    full_name: Mapped[str] = mapped_column("strnomecompleto", String(255), nullable=False)
-    email: Mapped[str | None] = mapped_column("stremail", String(255), nullable=True)
-    phone: Mapped[str | None] = mapped_column("strtelefone", String(20), nullable=True)
-    is_active: Mapped[bool] = mapped_column(
-        "bolativo",
-        Boolean,
-        nullable=False,
-        default=True,
-        server_default="1",
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        "dtacriacao",
-        DateTime(),
-        nullable=False,
-        server_default=func.now(),
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        "dtaatualizacao",
-        DateTime(),
-        nullable=False,
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
-
-Index("ix_tblalunos_matricula", Student.registration_number, unique=True)
-Index("ix_tblalunos_email", Student.email, unique=True)
+__all__ = ["Student"]
 

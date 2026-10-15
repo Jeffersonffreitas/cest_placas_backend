@@ -6,8 +6,10 @@ from app import models
 
 
 def test_all_models_can_be_imported_and_mappers_configured() -> None:
-    assert models.Student.__tablename__ == "tblalunos"
+    assert models.Student is models.Person
+    assert models.Student.__tablename__ == "tblpessoas"
     assert models.AccessEvent.__tablename__ == "tbleventosacesso"
+    assert "tblalunos" not in models.Base.metadata.tables
 
     configure_mappers()
 
@@ -16,16 +18,6 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
     inspector = inspect(db_session.bind)
 
     expected_columns_by_table = {
-        "tblalunos": {
-            "intalunoid",
-            "strmatricula",
-            "strnomecompleto",
-            "stremail",
-            "strtelefone",
-            "bolativo",
-            "dtacriacao",
-            "dtaatualizacao",
-        },
         "tblveiculos": {
             "intveiculoid",
             "strplaca",
@@ -129,10 +121,11 @@ def test_models_use_portuguese_database_table_and_column_names(db_session: Sessi
         actual_columns = {column["name"] for column in inspector.get_columns(table_name)}
         assert expected_columns.issubset(actual_columns)
 
-    assert models.Student.id.property.columns[0].name == "intalunoid"
+    assert models.Student.id.property.columns[0].name == "intpessoaid"
     assert models.Coordination.__tablename__ == "tblcoordenacoes"
     assert models.Course.__tablename__ == "tblcursos"
     assert models.Student.id.key == "id"
+    assert "tblalunos" not in inspector.get_table_names()
     assert "intalunoid" not in {
         column.name for column in models.Vehicle.__table__.columns
     }

@@ -5,7 +5,7 @@ import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi.testclient import TestClient
-from sqlalchemy import inspect, select
+from sqlalchemy import inspect, select, text
 from sqlalchemy.orm import Session
 
 from app.models.person import Person
@@ -261,14 +261,32 @@ def test_students_endpoint_uses_people_as_its_primary_source(
     ) is not None
 
 
-def test_student_copy_is_idempotent_and_preserves_legacy_student(
+def test_student_copy_is_idempotent_and_preserves_legacy_student_table(
     db_session: Session, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    student = Student(
-        registration_number="MIG100", full_name="Aluno Migrado",
-        email="migrado@example.com", phone="85999999999", is_active=True,
+    db_session.execute(text("""
+        CREATE TABLE tblalunos (
+            intalunoid INTEGER PRIMARY KEY,
+            strmatricula VARCHAR(50) NOT NULL,
+            strnomecompleto VARCHAR(255) NOT NULL,
+            stremail VARCHAR(255),
+            strtelefone VARCHAR(20),
+            bolativo BOOLEAN NOT NULL,
+            dtacriacao DATETIME NOT NULL,
+            dtaatualizacao DATETIME NOT NULL
+        )
+    """))
+    db_session.execute(
+        text("""
+            INSERT INTO tblalunos (
+                intalunoid, strmatricula, strnomecompleto, stremail,
+                strtelefone, bolativo, dtacriacao, dtaatualizacao
+            ) VALUES (
+                100, 'MIG100', 'Aluno Migrado', 'migrado@example.com',
+                '85999999999', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+        """)
     )
-    db_session.add(student)
     db_session.commit()
     context = MigrationContext.configure(db_session.connection())
     migration_path = Path(__file__).parents[1] / "alembic" / "versions" / "0010_create_people.py"
@@ -289,7 +307,11 @@ def test_student_copy_is_idempotent_and_preserves_legacy_student(
     assert len(people) == 1
     assert people[0].person_type == "ALUNO"
     assert people[0].full_name == "Aluno Migrado"
-    assert db_session.get(Student, student.id) is not None
+    assert inspect(db_session.bind).has_table("tblalunos")
+
+
+def test_student_model_name_is_a_nonpersistent_person_alias() -> None:
+    assert Student is Person
 
 
 def test_people_primary_entity_migration_does_not_change_existing_check(
