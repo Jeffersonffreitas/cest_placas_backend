@@ -326,27 +326,68 @@ como compatibilidade e filtram pessoas do tipo `ALUNO`. `FUNCIONARIO` e
 `VISITANTE` tambem permanecem em `tblpessoas`. A integracao real com o RM ainda
 nao foi implementada.
 
-### Integracao institucional preparada (Fase 6.8)
+### Integracao institucional consolidada (Fase 6.11)
 
-A aplicacao possui uma fronteira `InstitutionalPersonProvider` em
-`app/integrations` e um provider local em memoria para desenvolvimento e
-testes. Nesta fase **nao existe conexao com RM nem com outro banco
-institucional**. O adapter real, suas credenciais e sua configuracao ficam para
-uma etapa futura.
+A aplicacao possui a fronteira `InstitutionalPersonProvider` em
+`app/integrations`. Rotas e services dependem somente desse contrato e nao
+conhecem protocolo, tabelas ou campos do RM. A representacao normalizada contem
+`registration`, `full_name`, `person_type`, `email`, `phone`, `active` e,
+quando fornecidos, `course` e `coordination`.
 
-O service institucional normaliza a matricula/registro, consulta o provider,
-identifica `ALUNO` ou `FUNCIONARIO`, informa a situacao ativa e pode sincronizar
-o resultado com `tblpessoas`. A sincronizacao reutiliza a pessoa existente por
-`strmatricula`, e idempotente e nao troca automaticamente uma pessoa do tipo
-`VISITANTE`. IDs, vinculos com veiculos, eventos e historico permanecem
-preservados. Pessoas inativas podem ser consultadas, mas nao sao sincronizadas.
+O provider `local` em memoria permanece como padrao para desenvolvimento e
+testes deterministas, sem rede ou banco externo. Ele preserva os registros
+`20260001` (`ALUNO`), `FUNC0001` (`FUNCIONARIO`) e `20260002` (`ALUNO`
+inativo). A selecao e feita por configuracao:
+
+```env
+INSTITUTIONAL_PROVIDER=local
+```
+
+O valor `rm` seleciona apenas a fronteira de um RM ainda nao configurado. A API
+continua iniciando normalmente, mas consultas e sincronizacoes institucionais
+retornam HTTP 503 controlado ate existir um adapter real. Nenhuma URL, host,
+porta, tabela, coluna, credencial, token ou tecnologia de transporte foi
+presumida. **Integracao RM real pendente por ausencia de contrato/dados de
+conexao.**
+
+Para implementar o adapter real ainda sao necessarios:
+
+- tecnologia e protocolo de acesso ao RM;
+- endpoint ou host e porta oficiais;
+- contrato de autenticacao e forma segura de fornecer credenciais;
+- recurso, tabela ou API oficial de pessoas;
+- nomes e tipos reais dos campos de matricula, nome, email, telefone, tipo e
+  situacao;
+- valores reais usados pelo RM para aluno/estudante e
+  funcionario/colaborador;
+- recursos e campos oficiais de curso e coordenacao;
+- regras de disponibilidade, timeout e ambientes autorizados.
+
+O service normaliza a matricula/registro e aceita somente os tipos locais
+`ALUNO` e `FUNCIONARIO`; os termos institucionais `ESTUDANTE` e `COLABORADOR`
+sao mapeados para esses tipos. Um tipo desconhecido, uma resposta incompleta ou
+uma matricula divergente produz erro controlado e nao grava dados. Falhas ou
+indisponibilidade do provider nao derrubam as demais rotas da API e detalhes
+internos nao sao expostos na resposta.
+
+A consulta `GET` nao persiste dados. A sincronizacao usa `strmatricula` para
+reutilizar a mesma pessoa, cria ou atualiza exclusivamente `tblpessoas` e e
+idempotente. Nome, tipo, matricula e situacao sao atualizados a partir da origem;
+email, telefone e curso locais nao sao apagados quando o provider os omite.
+Pessoas `VISITANTE` continuam locais e nunca sao convertidas automaticamente.
+IDs, vinculos N:N em `tblpessoaveiculo`, veiculos, eventos e historico
+permanecem preservados. Pessoas institucionais inativas podem ser consultadas,
+mas nao sao sincronizadas.
 
 As tabelas `tblcoordenacoes` e `tblcursos` representam a estrutura academica.
 Uma coordenacao possui varios cursos e cada curso pertence a uma coordenacao.
 Alunos podem apontar para um curso por `tblpessoas.intcursoid`; funcionarios e
 visitantes podem manter esse campo nulo. A migration
 `0016_institutional_people_courses` preserva cursos legados usados por pessoas
-ao copiar seus dados de `tbldominios` antes de trocar a chave estrangeira.
+ao copiar seus dados de `tbldominios` antes de trocar a chave estrangeira. O
+sync reutiliza coordenacoes por sigla/nome e cursos por codigo/nome. Como
+`tblcursos` exige uma coordenacao real, um curso sem coordenacao no provider nao
+e persistido e nenhuma coordenacao ficticia e criada.
 
 Endpoints administrativos protegidos:
 
@@ -359,8 +400,9 @@ GET  /api/v1/courses
 
 As listagens aceitam `active` e `name`; cursos tambem aceitam
 `coordination_id`. O retorno da consulta institucional usa JSON em snake_case e
-inclui `registration`, `full_name`, `person_type`, `email`, `active`, `course`
-e `coordination`.
+inclui `registration`, `full_name`, `person_type`, `email`, `phone`, `active`,
+`course` e `coordination`. Matricula inexistente retorna 404; provider
+indisponivel retorna 503.
 
 Exemplo de consulta e sincronizacao usando o provider local:
 

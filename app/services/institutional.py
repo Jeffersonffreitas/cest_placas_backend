@@ -1,11 +1,17 @@
+import logging
+from typing import NoReturn
+
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
 from app.integrations.institutional import (
-    InstitutionalCoordination,
     InstitutionalPerson,
     InstitutionalPersonProvider,
+    InstitutionalProviderError,
+    InstitutionalProviderUnavailableError,
+    normalize_institutional_person_type,
     normalize_registration,
 )
 from app.models.course import Course
@@ -13,27 +19,137 @@ from app.models.person import Person
 from app.repositories import coordinations as coordination_repository
 from app.repositories import courses as course_repository
 from app.repositories import people as person_repository
-from app.schemas.institutional import InstitutionalPersonRead
+from app.schemas.institutional import (
+    InstitutionalCoordinationRead,
+    InstitutionalPersonRead,
+)
 
 
-def _to_schema(person: InstitutionalPerson) -> InstitutionalPersonRead:
-    return InstitutionalPersonRead(
-        registration=normalize_registration(person.registration),
-        full_name=person.full_name,
-        person_type=person.person_type,
-        email=person.email,
-        active=person.active,
-        course=(
-            {"name": person.course.name, "code": person.course.code}
-            if person.course is not None
-            else None
-        ),
-        coordination=(
-            {"name": person.coordination.name, "acronym": person.coordination.acronym}
-            if person.coordination is not None
-            else None
-        ),
+logger = logging.getLogger(__name__)
+
+
+def _provider_name(provider: InstitutionalPersonProvider) -> str:
+    return provider.__class__.__name__
+
+
+def _invalid_provider_response(
+    provider: InstitutionalPersonProvider,
+    registration: str,
+    *,
+    code: str = "institutional_provider_invalid_response",
+) -> NoReturn:
+    logger.warning(
+        "Invalid institutional provider response: provider=%s registration=%s",
+        _provider_name(provider),
+        registration,
     )
+    raise AppException(
+        "The institutional provider returned invalid data.",
+        status_code=502,
+        code=code,
+    )
+
+
+def _find_source(
+    registration: str,
+    provider: InstitutionalPersonProvider,
+) -> InstitutionalPerson | None:
+    try:
+        return provider.find_by_registration(registration)
+    except InstitutionalProviderUnavailableError:
+        logger.warning(
+            "Institutional provider unavailable: provider=%s registration=%s",
+            _provider_name(provider),
+            registration,
+        )
+        raise AppException(
+            "The institutional provider is temporarily unavailable.",
+            status_code=503,
+            code="institutional_provider_unavailable",
+        ) from None
+    except InstitutionalProviderError:
+        logger.error(
+            "Institutional provider failed: provider=%s registration=%s",
+            _provider_name(provider),
+            registration,
+        )
+        raise AppException(
+            "The institutional provider could not complete the request.",
+            status_code=502,
+            code="institutional_provider_error",
+        ) from None
+    except Exception as exc:
+        logger.error(
+            "Unexpected institutional provider failure: provider=%s "
+            "registration=%s exception=%s",
+            _provider_name(provider),
+            registration,
+            exc.__class__.__name__,
+        )
+        raise AppException(
+            "The institutional provider is temporarily unavailable.",
+            status_code=503,
+            code="institutional_provider_unavailable",
+        ) from None
+
+
+def _to_schema(
+    person: InstitutionalPerson,
+    provider: InstitutionalPersonProvider,
+    expected_registration: str,
+) -> InstitutionalPersonRead:
+    if not isinstance(person, InstitutionalPerson):
+        _invalid_provider_response(provider, expected_registration)
+    if not isinstance(person.registration, str):
+        _invalid_provider_response(provider, expected_registration)
+    registration = normalize_registration(person.registration)
+    if registration != expected_registration:
+        _invalid_provider_response(provider, expected_registration)
+    if not isinstance(person.person_type, str):
+        _invalid_provider_response(
+            provider,
+            expected_registration,
+            code="institutional_person_type_invalid",
+        )
+    try:
+        person_type = normalize_institutional_person_type(person.person_type)
+    except ValueError:
+        _invalid_provider_response(
+            provider,
+            expected_registration,
+            code="institutional_person_type_invalid",
+        )
+    if not isinstance(person.active, bool):
+        _invalid_provider_response(provider, expected_registration)
+    if person.course is not None and not hasattr(person.course, "name"):
+        _invalid_provider_response(provider, expected_registration)
+    if person.coordination is not None and not hasattr(person.coordination, "name"):
+        _invalid_provider_response(provider, expected_registration)
+
+    try:
+        return InstitutionalPersonRead(
+            registration=registration,
+            full_name=person.full_name,
+            person_type=person_type,
+            email=person.email,
+            phone=person.phone,
+            active=person.active,
+            course=(
+                {"name": person.course.name, "code": person.course.code}
+                if person.course is not None
+                else None
+            ),
+            coordination=(
+                {
+                    "name": person.coordination.name,
+                    "acronym": person.coordination.acronym,
+                }
+                if person.coordination is not None
+                else None
+            ),
+        )
+    except (AttributeError, TypeError, ValidationError):
+        _invalid_provider_response(provider, expected_registration)
 
 
 def resolve_institutional_person(
@@ -49,46 +165,53 @@ def resolve_institutional_person(
             status_code=422,
             code="institutional_registration_required",
         )
-    person = provider.find_by_registration(normalized_registration)
+    person = _find_source(normalized_registration, provider)
     if person is None:
         raise AppException(
             "Institutional person was not found.",
             status_code=404,
             code="institutional_person_not_found",
         )
-    if require_active and not person.active:
+    resolved = _to_schema(person, provider, normalized_registration)
+    if require_active and not resolved.active:
         raise AppException(
             "Institutional person is inactive.",
             status_code=409,
             code="institutional_person_inactive",
         )
-    return _to_schema(person)
+    return resolved
 
 
 def _sync_coordination(
-    db: Session, coordination: InstitutionalCoordination | None,
+    db: Session, coordination: InstitutionalCoordinationRead,
 ) -> int:
-    data = coordination or InstitutionalCoordination(
-        name="Coordenação não informada", acronym="NAO_INFORMADA"
-    )
     row = coordination_repository.get_by_identity(
-        db, acronym=data.acronym, name=data.name
+        db, acronym=coordination.acronym, name=coordination.name
     )
     if row is None:
         row = coordination_repository.create_coordination(
             db,
-            {"name": data.name, "acronym": data.acronym, "is_active": True},
+            {
+                "name": coordination.name,
+                "acronym": coordination.acronym,
+                "is_active": True,
+            },
         )
         db.flush()
     else:
-        row.name = data.name
-        row.acronym = data.acronym
+        row.name = coordination.name
+        if coordination.acronym is not None:
+            row.acronym = coordination.acronym
         row.is_active = True
     return row.id
 
 
-def _sync_course(db: Session, person: InstitutionalPerson) -> Course | None:
-    if person.person_type != "ALUNO" or person.course is None:
+def _sync_course(db: Session, person: InstitutionalPersonRead) -> Course | None:
+    if (
+        person.person_type != "ALUNO"
+        or person.course is None
+        or person.coordination is None
+    ):
         return None
     coordination_id = _sync_coordination(db, person.coordination)
     course = course_repository.get_by_identity(
@@ -110,7 +233,8 @@ def _sync_course(db: Session, person: InstitutionalPerson) -> Course | None:
         db.flush()
     else:
         course.name = person.course.name
-        course.code = person.course.code
+        if person.course.code is not None:
+            course.code = person.course.code
         course.is_active = True
     return course
 
@@ -149,32 +273,35 @@ def sync_institutional_person(
             status_code=422,
             code="institutional_registration_required",
         )
-    source = provider.find_by_registration(normalized_registration)
+    source = _find_source(normalized_registration, provider)
     if source is None:
         raise AppException(
             "Institutional person was not found.",
             status_code=404,
             code="institutional_person_not_found",
         )
-    if not source.active:
+    resolved = _to_schema(source, provider, normalized_registration)
+    if not resolved.active:
         raise AppException(
             "Institutional person is inactive.",
             status_code=409,
             code="institutional_person_inactive",
         )
-    resolved = _to_schema(source)
-
     try:
-        course = _sync_course(db, source)
         person = _select_person_for_sync(db, resolved.registration)
+        course = _sync_course(db, resolved)
         values: dict[str, object] = {
             "registration_number": resolved.registration,
             "full_name": resolved.full_name,
             "person_type": resolved.person_type,
-            "email": resolved.email,
             "is_active": resolved.active,
-            "course_id": course.id if course is not None else None,
         }
+        if resolved.email is not None:
+            values["email"] = resolved.email
+        if resolved.phone is not None:
+            values["phone"] = resolved.phone
+        if course is not None:
+            values["course_id"] = course.id
         if person is None:
             person = person_repository.create_person(db, values)
         else:

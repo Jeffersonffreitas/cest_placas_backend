@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="change_me_in_production", alias="SECRET_KEY")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     access_token_expire_minutes: int = Field(default=60, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
+
+    institutional_provider: Literal["local", "rm"] = Field(
+        default="local", alias="INSTITUTIONAL_PROVIDER"
+    )
+
+    @field_validator("institutional_provider", mode="before")
+    @classmethod
+    def normalize_institutional_provider(cls, value: Any) -> Any:
+        return value.strip().lower() if isinstance(value, str) else value
 
     @field_validator("debug", mode="before")
     @classmethod

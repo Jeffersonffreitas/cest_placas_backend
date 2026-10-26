@@ -1,6 +1,19 @@
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from app.core.config import settings
+
+
+InstitutionalPersonType = Literal["ALUNO", "FUNCIONARIO"]
+
+
+class InstitutionalProviderError(RuntimeError):
+    """Base error raised by institutional provider adapters."""
+
+
+class InstitutionalProviderUnavailableError(InstitutionalProviderError):
+    """Raised when a configured institutional source cannot be reached."""
+
 
 @dataclass(frozen=True, slots=True)
 class InstitutionalCoordination:
@@ -18,9 +31,10 @@ class InstitutionalCourse:
 class InstitutionalPerson:
     registration: str
     full_name: str
-    person_type: Literal["ALUNO", "FUNCIONARIO"]
-    email: str | None
+    person_type: InstitutionalPersonType
     active: bool
+    email: str | None = None
+    phone: str | None = None
     course: InstitutionalCourse | None = None
     coordination: InstitutionalCoordination | None = None
 
@@ -36,6 +50,21 @@ def normalize_registration(registration: str) -> str:
     return registration.strip().upper()
 
 
+def normalize_institutional_person_type(person_type: str) -> str:
+    normalized = person_type.strip().upper()
+    aliases = {
+        "ALUNO": "ALUNO",
+        "ESTUDANTE": "ALUNO",
+        "FUNCIONARIO": "FUNCIONARIO",
+        "FUNCIONÁRIO": "FUNCIONARIO",
+        "COLABORADOR": "FUNCIONARIO",
+    }
+    try:
+        return aliases[normalized]
+    except KeyError:
+        raise ValueError("Unsupported institutional person type.") from None
+
+
 class LocalInstitutionalPersonProvider:
     """In-memory provider used until the real institutional adapter exists."""
 
@@ -48,12 +77,26 @@ class LocalInstitutionalPersonProvider:
         return self._people.get(normalize_registration(registration))
 
 
+class UnconfiguredRMInstitutionalPersonProvider:
+    """RM boundary that reports the missing real contract and connection.
+
+    No transport, endpoint, schema, credentials, or RM field mapping is assumed.
+    """
+
+    def find_by_registration(self, registration: str) -> InstitutionalPerson | None:
+        del registration
+        raise InstitutionalProviderUnavailableError(
+            "The real RM provider has no configured contract or connection."
+        )
+
+
 _LOCAL_PEOPLE = (
     InstitutionalPerson(
         registration="20260001",
         full_name="Aluno Institucional de Teste",
         person_type="ALUNO",
         email="aluno.teste@cest.edu.br",
+        phone="85999990001",
         active=True,
         course=InstitutionalCourse(name="Análise e Desenvolvimento de Sistemas", code="ADS"),
         coordination=InstitutionalCoordination(
@@ -65,6 +108,7 @@ _LOCAL_PEOPLE = (
         full_name="Funcionário Institucional de Teste",
         person_type="FUNCIONARIO",
         email="funcionario.teste@cest.edu.br",
+        phone="85999990002",
         active=True,
     ),
     InstitutionalPerson(
@@ -77,7 +121,10 @@ _LOCAL_PEOPLE = (
 )
 
 local_institutional_person_provider = LocalInstitutionalPersonProvider(_LOCAL_PEOPLE)
+unconfigured_rm_institutional_person_provider = UnconfiguredRMInstitutionalPersonProvider()
 
 
 def get_institutional_person_provider() -> InstitutionalPersonProvider:
-    return local_institutional_person_provider
+    if settings.institutional_provider == "local":
+        return local_institutional_person_provider
+    return unconfigured_rm_institutional_person_provider

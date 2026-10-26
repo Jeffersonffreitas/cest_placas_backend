@@ -5,7 +5,10 @@ from app.integrations.institutional import (
     InstitutionalCourse,
     InstitutionalPerson,
     InstitutionalPersonProvider,
+    InstitutionalProviderError,
+    InstitutionalProviderUnavailableError,
     LocalInstitutionalPersonProvider,
+    UnconfiguredRMInstitutionalPersonProvider,
 )
 
 __all__ = [
@@ -13,6 +16,9 @@ __all__ = [
     "InstitutionalCourse",
     "InstitutionalPerson",
     "InstitutionalPersonProvider",
+    "InstitutionalProviderError",
+    "InstitutionalProviderUnavailableError",
     "LocalInstitutionalPersonProvider",
+    "UnconfiguredRMInstitutionalPersonProvider",
 ]
 
